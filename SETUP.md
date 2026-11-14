@@ -1,6 +1,6 @@
 # Guided setup
 
-Instructions for an agent that sets up a Brain workspace (command center, powered by Brain Core) **together with its owner, in a dialog**. Start it with one line in Claude Code, Codex or any agent that can run a shell and fetch a URL:
+Instructions for an agent that sets up a Brain workspace (command center, powered by Brain Core) **together with its owner, in a dialog**. Start it with one line in Claude Code, Codex, Antigravity, or any agent that can run a shell and fetch a URL:
 
 > Set up Brain Core for me using https://raw.githubusercontent.com/rawmahn/brain-core/main/SETUP.md
 

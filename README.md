@@ -3,24 +3,34 @@
 **The public core for your personal AI Brain.** One private Git repo (your **Brain**, or command center) that remembers for you, knows all your projects, and runs your coding agents as a team that comes to you only when a decision is really yours.
 
 - **Completely free.** MIT-licensed. No subscription, no account, no server to host.
-- **Pure Git.** Your notes, rules, task queue and agent claims are plain files, commits and GitHub issues. No database, no SaaS, no lock-in: clone the repo and you have everything.
+- **Zero AI vendor lock-in.** Your working memory, rules, and task queue live in your Git repo—not trapped inside one AI company's app. Switch between **Claude Code, Codex, Antigravity**, or whatever comes next without losing a thing.
+- **Pure Git.** Plain files, commits, and GitHub issues. No database, no SaaS, no extra app: clone the repo and you have everything.
 - **Makes your life easier.** Stop re-explaining your setup in every session. Every agent reads the same manual and works from the same queue, and you get short decision cards you can answer at a glance, even from your phone.
-- **Works with the agents you already use:** Claude Code, Codex, and any agent that reads `CLAUDE.md`/`AGENTS.md` and can run a shell.
 
 ## The idea
 
 Your **Brain** (command center) is one private repository where everything comes together: part memory, part knowledge base, part project office. **Brain Core** is the shared, open-source engine mounted inside it at `core/`.
 
-- **Just talk to it.** Open a session (Claude Code, Codex, ...) in your Brain and start on any of your projects right away. The agent has already read the manual and knows your repos, your rules and where things stand. You don't re-explain anything.
+- **Just talk to it.** Open a session (Claude Code, Codex, Antigravity, ...) in your Brain and start on any of your projects right away. The agent has already read the manual and knows your repos, your rules and where things stand. You don't re-explain anything.
 - **It keeps notes so you don't have to.** As you talk, the agent writes down what matters: decisions, your own takes, gotchas, notes on people, a daily log. You don't have to track every conversation, because the next session picks up from the files. What already lives in a ticket, PR or doc gets a link, not a copy.
 - **The real work happens elsewhere.** Code stays in its own repos. Your Brain knows all of them, sends changes into them, hands tasks to agents and checks what comes back.
 - **Dead simple.** Plain Markdown files, plain Git, plain GitHub issues. No app to install, nothing to buy, no extra service. If you can clone a repo, you have the whole thing.
 
 On top of that sits the agent team: a shared task queue that agents pick up on their own, and short decision cards when they need you.
 
+## Switch agents, keep your brain
+
+Every AI lab wants your memory, custom instructions, projects, and task history locked inside *their* app. It's convenient—until a better model or coding agent shows up and moving means leaving your context behind and starting from scratch.
+
+Brain Core flips that. Your working memory, rules, skills, and task queue already live in your own Git repo. Open your Brain in **Claude Code**, **Codex**, **Antigravity**, or any agent that reads `CLAUDE.md`/`AGENTS.md` and can run a shell:
+
+- **One shared memory.** Decisions, project state, gotchas, and notes stay in plain Markdown—not in a provider's proprietary memory store.
+- **One shared task queue.** Issues, claims, and decision cards live in GitHub, so any agent picks up where the previous one stopped.
+- **Zero switching cost.** Change harnesses mid-project, route different tasks to different models, or jump when the next flagship drops. Nothing has to be exported, and nothing gets lost.
+
 ## What's inside
 
-A personal Brain (command center) for working with coding agents (Claude Code, Codex, others): one private Git repo that sits above all your code repos and holds your notes, your repo registry, and a task queue that agents pick up on their own.
+A personal Brain (command center) for working with coding agents (Claude Code, Codex, Antigravity, others): one private Git repo that sits above all your code repos and holds your notes, your repo registry, and a task queue that agents pick up on their own.
 
 - **A manual for agents** ([MANUAL.md](MANUAL.md)): how your Brain is laid out, standing rules, how changes land in each repo.
 - **A task queue on GitHub issues** (`scripts/task.sh`): statuses as labels, race-safe claims as commits on `claim/<n>` branches, decision cards when an agent needs your answer. One queue across your Brain repo and any repo marked `tasks: true`; in a repo shared with others (`tasks: assigned`) each person's agents take only the issues assigned to them.
@@ -31,7 +41,7 @@ Your Brain mounts this repo at `core/` as a [git subtree](https://github.com/git
 
 ## Start a workspace
 
-**Guided:** tell your agent (Claude Code, Codex, ...)
+**Guided:** tell your agent (Claude Code, Codex, Antigravity, ...)
 
 > Set up Brain Core for me using https://raw.githubusercontent.com/rawmahn/brain-core/main/SETUP.md
 
