@@ -1,4 +1,4 @@
-# {{OWNER}}'s command center
+# {{OWNER}}'s Brain (command center)
 
 **Read [core/MANUAL.md](core/MANUAL.md) first:** the base manual (layout, standing rules, tasks, recipes). This file adds {{OWNER}}'s own context and rules, and wins where the two disagree.
 

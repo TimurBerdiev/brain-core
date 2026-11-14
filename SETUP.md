@@ -1,8 +1,8 @@
 # Guided setup
 
-Instructions for an agent that sets up a Boss Brain workspace **together with its owner, in a dialog**. Start it with one line in Claude Code, Codex or any agent that can run a shell and fetch a URL:
+Instructions for an agent that sets up a Brain workspace (command center, powered by Brain Core) **together with its owner, in a dialog**. Start it with one line in Claude Code, Codex or any agent that can run a shell and fetch a URL:
 
-> Set up Boss Brain for me using https://raw.githubusercontent.com/rawmahn/boss-brain/main/SETUP.md
+> Set up Brain Core for me using https://raw.githubusercontent.com/rawmahn/brain-core/main/SETUP.md
 
 Run it again inside an existing workspace to finish an interrupted setup or to add repos later.
 
@@ -26,7 +26,7 @@ The owner wants a working system, not homework. You run every command; the owner
 - If the current folder (or a parent) has `workspace.yaml` and `core/`, this is an existing workspace: check each step below and **resume at the first one that isn't done.**
   - Step 3 is not done while `CLAUDE.md` still has the template's "Add your own standing rules here" line.
   - Step 4 is not done while `repos.yaml` still has `repos: {}`.
-- Otherwise, this is a new setup. Ask where the workspace should live and what to call it. Suggest `~/workspace` (or a new folder next to the current one). Never set up inside an existing git repo that isn't a workspace.
+- Otherwise, this is a new setup. Ask where the workspace should live and what to call it. Suggest `~/brain` (or `~/workspace`, or a new folder next to the current one). Never set up inside an existing git repo that isn't a workspace.
 
 ## Step 1: Prerequisites
 
@@ -56,10 +56,10 @@ Then:
 ```bash
 mkdir -p <path> && cd <path>
 git init -b main
-git commit --allow-empty -m "Start workspace"
-git subtree add --prefix=core https://github.com/rawmahn/boss-brain.git main --squash
+git commit --allow-empty -m "Start brain"
+git subtree add --prefix=core https://github.com/rawmahn/brain-core.git main --squash
 core/init.sh --owner "<owner>" --github <account> --name <name>
-git add -A && git commit -m "Set up workspace"
+git add -A && git commit -m "Set up brain with Brain Core"
 ```
 
 Then ask before creating the GitHub repo. It must be **private**, since it will hold personal notes:
@@ -128,7 +128,7 @@ Offer to run the [autopilot](skills/autopilot/SKILL.md) skill now, in this sessi
 
 Ask whether the owner wants runs on a schedule now, or later once they trust it. Recommend later. If now, offer one of these:
 
-- **Cloud (recommended):** a scheduled task in their agent's cloud offering, for example Claude Code on the web, with the workspace repo as the source and `/autopilot` as the prompt. Their machine can be off. If you have a tool to create scheduled tasks, offer to create it; otherwise, give the exact settings.
+- **Cloud (recommended):** a scheduled task in their agent's cloud offering — for example, a **Claude Code scheduled task** (Claude Code on the web) pointed at their Brain repo (and any code repos in `repos.yaml` it should touch) with `/autopilot` as the prompt. No server or custom runner is needed, and their machine can be off. If you have a tool to create scheduled tasks, offer to create it; otherwise, give the exact settings.
 - **Local:** a cron or launchd entry such as `0 8-18 * * 1-5 cd <path> && claude -p "/autopilot" >> ~/autopilot.log 2>&1`. Mention that unattended runs can't answer permission prompts. Help the owner allow-list the needed tools (git, gh, `scripts/task.sh`, their test commands, file edits) in the agent's settings instead of skipping permissions, and that the machine must be awake.
 
 ## Step 9: Wrap up

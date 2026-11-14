@@ -1,8 +1,8 @@
-# Boss Brain manual
+# Brain Core manual
 
-The base manual for a personal command-center workspace: one repo that sits above all of a person's code repos. **Notes live in the workspace; code lives in the repos.** This file comes from [Boss Brain](README.md), mounted in the workspace at `core/`. The workspace's own `CLAUDE.md` names the owner, adds their rules and **wins wherever the two disagree**.
+The base manual for a personal Brain (command-center workspace): one repo that sits above all of a person's code repos. **Notes live in the workspace; code lives in the repos.** This file comes from [Brain Core](README.md), mounted in the workspace at `core/`. The Brain's own `CLAUDE.md` names the owner, adds their rules and **wins wherever the two disagree**.
 
-A workspace has three jobs:
+A Brain workspace has three jobs:
 
 1. **Drive changes across many repos from one place.** Each repo has its own rules (account, working branch, how changes land) in `repos.yaml`.
 2. **Hand off work** to agents or teammates, then check the result yourself (diff, CI, the running thing) rather than trusting a summary.
@@ -14,8 +14,8 @@ A workspace has three jobs:
 
 | Path | Role |
 |---|---|
-| `CLAUDE.md` | The workspace's own manual: points here first, then the owner's rules, workstreams and recipes. `AGENTS.md` is a symlink to it |
-| `core/` | This core (a `git subtree` of Boss Brain). Shared by everyone who uses it; see **Core** below before editing it |
+| `CLAUDE.md` | The Brain's own manual: points here first, then the owner's rules, workstreams and recipes. `AGENTS.md` is a symlink to it |
+| `core/` | This core (a `git subtree` of Brain Core). Shared by everyone who uses it; see **Core** below before editing it |
 | `workspace.yaml` | Owner name, GitHub account, where core comes from |
 | `repos.yaml` | Registry of every repo: remote, local path, account, working branch, `pr_policy`. **Read it before any git work.** |
 | `workers.yaml` | *(optional)* Execution engines for a dispatcher; its `workers:` keys are the allowed `worker:<engine>` pins |
@@ -84,7 +84,7 @@ Tasks are **GitHub issues in the task repos**: the workspace repo itself (the ho
   The owner answers with a comment that starts `<!-- answer -->` (the chosen option or Yes/No, plus an optional note) and moves the issue to `ready`. A comment that starts `<!-- question -->` is a question instead: answer it with a new card and put the issue back to `in-review`. Log comments are for agents: decisions and gotchas, a few lines each, detail behind links.
 - **Claims:** a claim says who holds an issue right now; it is separate from the status. It is a commit on branch `claim/<number>` of the issue's own repo, written through `scripts/task.sh`. Each claim/release is a new commit on top of the tip it read, pushed without force, so when two agents race GitHub accepts one push and rejects the other. The branch is never rewritten. Never work on an issue you haven't claimed. Claiming makes the issue `ready`.
 - **Stale claims:** a claim older than 2 h with no new commit is stale. `next`, `take` and `holds` include expired claims; listing is read-only. `claim <n>` and `take` take over an expired claim automatically (non-force push, so only one worker wins). `--steal` is accepted for compatibility and never overrides a fresh claim. Re-running `claim` with your own id refreshes it; a worker lasting more than 2 h must refresh before expiry. Always release with `--as <claim-id>` so an old worker cannot release a successor's claim.
-- **Dispatchers (optional):** when `AGENT_TASK_NUMBER`, `AGENT_CLAIM_ID` and `AGENT_WORKER` are set, a dispatcher has assigned that one issue to this worker; the worker claims it itself and must not pick another (see the autopilot skill, "Assigned task mode").
+- **Scheduled runs & dispatchers (optional):** pointing a cloud scheduled task (such as a Claude Code scheduled task) or local cron job at the Brain repo with `/autopilot` works out of the box with no extra runner. When a dispatcher is used instead, `AGENT_TASK_NUMBER`, `AGENT_CLAIM_ID` and `AGENT_WORKER` are set to assign that one issue to the worker; the worker claims it itself and must not pick another (see the autopilot skill, "Assigned task mode").
 - **Moving between statuses:** `release <n> --to <status>` when you let go (no `--to` keeps `ready`, for a partial chunk); `set <n> <status>` changes it without a claim. When you let go of a task: `--done` once the change is landed and verified; `--to in-review --card <file>` only if the work can't go on without the owner; `--to on-hold --waiting-on "<condition>"` if it now waits on something else.
 - **One session = one chunk.** Do one reasonable piece, rewrite **Next** in the issue body so a fresh session can start from it, add a Log comment if something was decided, release.
 - **Long remote waits:** if the next step waits on something elsewhere (CI, deploy, another issue) for more than ~30 min, release `--to on-hold --waiting-on ... [--check-after YYYY-MM-DD]` instead of holding the claim.
@@ -124,12 +124,12 @@ Or pick one yourself: `scripts/task.sh claim <n>` (prints your claim id).
 
 `core/` is shared code. Most workspaces only **use** it:
 
-- **Update:** `scripts/core.sh pull` merges the latest Boss Brain into `core/` (one squashed commit), then re-links new scripts and skills. Commit nothing else in that commit.
+- **Update:** `scripts/core.sh pull` merges the latest Brain Core into `core/` (one squashed commit), then re-links new scripts and skills. Commit nothing else in that commit.
 - **Customize in your own layer, not in `core/`.** Your `CLAUDE.md` overrides this manual; your own skills and scripts sit next to the linked ones. Edits inside `core/` will conflict on the next pull.
-- **Contribute:** port the change into a fresh branch of the Boss Brain repo (not your workspace history, so no private commits or messages travel) and open a PR there. Ask the owner first, as with any external repo.
+- **Contribute:** port the change into a fresh branch of the Brain Core repo (not your workspace history, so no private commits or messages travel) and open a PR there. Ask the owner first, as with any external repo.
 
 A workspace whose `workspace.yaml` sets `core.maintainer: true` also **pushes** core from inside the workspace:
 
-- Commits that touch `core/` touch nothing else, and their messages are safe to publish: they become public commits in Boss Brain.
-- `scripts/core.sh push` splits `core/` out of the workspace history, scans every outgoing commit message and diff for the terms in `.core-denylist` (private, one regex per line), and pushes to the `sync/<workspace>` branch of Boss Brain, opening a PR. `scripts/core.sh diff` shows what is not upstream yet.
+- Commits that touch `core/` touch nothing else, and their messages are safe to publish: they become public commits in Brain Core.
+- `scripts/core.sh push` splits `core/` out of the workspace history, scans every outgoing commit message and diff for the terms in `.core-denylist` (private, one regex per line), and pushes to the `sync/<workspace>` branch of Brain Core, opening a PR. `scripts/core.sh diff` shows what is not upstream yet.
 - Merge those PRs with a **merge commit** (not squash or rebase), or the next push re-sends the same commits.
