@@ -14,7 +14,7 @@
 #   scripts/task.sh release <n> [--as ID] [--to STATUS | --done | --dropped]
 #                         [--waiting-on TEXT] [--check-after YYYY-MM-DD] [--card FILE]
 #   scripts/task.sh set <n> STATUS [--waiting-on TEXT] [--check-after YYYY-MM-DD] [--card FILE]
-#                         (input-needed needs --card; its question becomes the Waiting on line)
+#                         (input-needed accepts --waiting-on or an optional --card)
 #   scripts/task.sh upload <n> FILE...            store card images on branch `cards` (under <n>/), print their URLs
 #   scripts/task.sh prune                         delete claim branches of closed issues (local only)
 #

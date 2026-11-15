@@ -54,7 +54,7 @@ ROOT = workspace_root()
 PREFIX = "claim/"
 STALE_HOURS = 2
 # Open statuses, one label each, in `list` order (what needs an answer first, backlog last).
-#   input-needed  someone has to answer (the assignee, else the owner): a decision or an input only they can give; comes with a decision card
+#   input-needed  someone has to answer (the assignee, else the owner)
 #   ready         an agent's turn: picked up by `take`, worked on while claimed
 #   on-hold    waits for a condition (another issue, an event, a date); agents re-check it each run
 #   backlog    an idea, or not specified enough to start; never picked up
@@ -674,7 +674,7 @@ def cmd_worker(a):
 
 # The labels of the task system (core/MANUAL.md, "Tasks"); `setup <repo>` creates the missing ones.
 LABELS = {
-    "input-needed": ("d93f0b", "Someone has to answer (the assignee, else the owner): a decision card waits"),
+    "input-needed": ("d93f0b", "Someone has to answer (the assignee, else the owner)"),
     "ready": ("1d76db", "Agent's turn"),
     "on-hold": ("fbca04", "Waits for a condition (Waiting on:)"),
     "backlog": ("cfd3d7", "Idea or not specified yet; agents don't pick it up"),
@@ -759,7 +759,7 @@ def main():
     st.set_defaults(fn=cmd_set)
     for x in (r, st):
         x.add_argument("--waiting-on"); x.add_argument("--check-after")
-        x.add_argument("--card", help="decision card file (- = stdin), required with input-needed")
+        x.add_argument("--card", help="optional decision card file (- = stdin) for input-needed")
     asg = sub.add_parser("assign"); asg.add_argument("number", type=parse_ref); asg.add_argument("agent", choices=AGENTS)
     asg.set_defaults(fn=cmd_assign)
     ow = sub.add_parser("assignee", help="whose task it is: me, a GitHub login, or none")
@@ -782,13 +782,11 @@ def main():
         else:
             a.status = LEGACY.get(a.status, a.status)
         s = a.to if a.cmd == "release" else a.status
-        if s == "input-needed":
-            if not a.card:
-                p.error("input-needed needs --card (the decision card, see core/MANUAL.md)")
+        if a.card:
+            if s != "input-needed":
+                p.error("--card goes with input-needed only")
             question, a.card = read_card(a.card)
             a.waiting_on = a.waiting_on or question
-        elif a.card:
-            p.error("--card goes with input-needed only")
         if s == "on-hold" and not a.waiting_on:
             p.error("on-hold needs --waiting-on (the condition to wait for)")
         if (a.waiting_on and s not in NEEDS_NOTE) or (a.check_after and s != "on-hold"):

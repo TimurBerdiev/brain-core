@@ -115,6 +115,28 @@ class InputNeededTests(unittest.TestCase):
         with patch.object(task, "mine", return_value=True):
             self.assertEqual([i["number"] for i in task.candidates(xs, {})], [3])
 
+    def test_cli_sets_or_releases_input_needed_without_a_card(self):
+        cases = [
+            (["set", "5", "input-needed"], "cmd_set", "status", None),
+            (["set", "5", "in-review", "--waiting-on", "Which version?"], "cmd_set", "status", "Which version?"),
+            (["release", "5", "--to", "input-needed", "--waiting-on", "Which version?"], "cmd_release", "to", "Which version?"),
+        ]
+        for args, command, status_arg, question in cases:
+            with self.subTest(args=args), patch.object(task.sys, "argv", ["task.sh", *args]), patch.object(task, command) as run:
+                task.main()
+                parsed = run.call_args.args[0]
+                self.assertEqual(getattr(parsed, status_arg), "input-needed")
+                self.assertEqual(parsed.waiting_on, question)
+                self.assertIsNone(parsed.card)
+
+    def test_cli_still_uses_the_card_question(self):
+        args = ["task.sh", "set", "5", "input-needed", "--card", "-"]
+        with patch.object(task.sys, "argv", args), patch.object(task.sys, "stdin", io.StringIO("### Which version?\n")), patch.object(task, "cmd_set") as run:
+            task.main()
+        parsed = run.call_args.args[0]
+        self.assertEqual(parsed.waiting_on, "Which version?")
+        self.assertEqual(parsed.card, "### Which version?")
+
     def test_unrenamed_repo_keeps_getting_in_review(self):
         api, calls = self.patch_call(["in-review", "ready"])
         with api:
