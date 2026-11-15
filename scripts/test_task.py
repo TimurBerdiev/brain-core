@@ -94,6 +94,52 @@ class QueueTests(unittest.TestCase):
         self.assertNotIn("check", git.call_args.kwargs)
 
 
+
+class InputNeededTests(unittest.TestCase):
+    """`in-review` was renamed to `input-needed`; a repo switches when its label is renamed."""
+
+    def setUp(self):
+        task._LABELS.clear()
+        self.addCleanup(task._LABELS.clear)
+
+    def patch_call(self, existing):
+        def api(path, method="GET", data=None, paginate=False, repo_name=None):
+            calls.append((path, method, data))
+            return [{"name": n} for n in existing] if path.startswith("labels") and method == "GET" else {}
+        calls = []
+        return patch.object(task, "api", side_effect=api), calls
+
+    def test_old_label_reads_as_input_needed_and_is_never_picked_up(self):
+        xs = [issue(1, "in-review"), issue(2, "input-needed"), issue(3, "ready")]
+        self.assertEqual([task.status(i, {}) for i in xs], ["input-needed", "input-needed", "ready"])
+        with patch.object(task, "mine", return_value=True):
+            self.assertEqual([i["number"] for i in task.candidates(xs, {})], [3])
+
+    def test_unrenamed_repo_keeps_getting_in_review(self):
+        api, calls = self.patch_call(["in-review", "ready"])
+        with api:
+            task.set_status(issue(5, "ready", "p1"), "input-needed", "Which option?")
+        self.assertEqual(calls[-1][2]["labels"], ["in-review", "p1"])
+
+    def test_renamed_repo_gets_input_needed_and_loses_the_old_label(self):
+        api, calls = self.patch_call(["input-needed", "ready"])
+        with api:
+            task.set_status(issue(5, "in-review"), "input-needed", "Which option?")
+            task.set_status(issue(6, "in-review", "p1"), "ready")
+        self.assertEqual(calls[1][2]["labels"], ["input-needed"])
+        self.assertEqual(calls[2][2]["labels"], ["p1", "ready"])
+
+    def test_setup_renames_only_when_asked(self):
+        api, calls = self.patch_call(["in-review", "ready"])
+        with api, patch.object(task, "repo", return_value="acme/workspace"), contextlib.redirect_stdout(io.StringIO()) as out, contextlib.redirect_stderr(io.StringIO()):
+            task.cmd_setup(types.SimpleNamespace(repo=None, rename_in_review=False))
+        self.assertIn("--rename-in-review", out.getvalue())
+        self.assertFalse([c for c in calls if c[1] == "PATCH" or (c[2] or {}).get("name") == "input-needed"])
+        api, calls = self.patch_call(["in-review", "ready"])
+        with api, patch.object(task, "repo", return_value="acme/workspace"), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            task.cmd_setup(types.SimpleNamespace(repo=None, rename_in_review=True))
+        self.assertIn(("labels/in-review", "PATCH"), [c[:2] for c in calls])
+
 class GitRaceTests(unittest.TestCase):
     def test_two_takeovers_of_same_tip_have_only_one_winner(self):
         with tempfile.TemporaryDirectory() as d:

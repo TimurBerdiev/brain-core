@@ -74,7 +74,7 @@ You don't need a custom orchestrator, database, or always-on server to run auton
 2. Syncs your code repos with `scripts/sync-repos.sh`.
 3. Re-checks `on-hold` tasks (`scripts/task.sh holds`) and picks the next `ready` task it can finish in that session.
 4. Claims the issue on a `claim/<n>` branch (`gh api` REST only — no GraphQL needed, and non-force pushes prevent two runs from colliding).
-5. Implements, tests, pushes per `pr_policy`, logs what happened, and releases (`--done`, `--to in-review --card ...` for a decision card, or `--to on-hold`).
+5. Implements, tests, pushes per `pr_policy`, logs what happened, and releases (`--done`, `--to input-needed --card ...` for a decision card, or `--to on-hold`).
 
 Your computer can be off, and multiple scheduled runs or interactive sessions won't step on each other.
 
