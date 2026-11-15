@@ -12,7 +12,7 @@ You run with nobody watching, from a scheduled routine or dispatcher. Do **one**
 - **Nothing that affects production.** No prod deploys, no writes to prod data, no changes to live infra, DNS, billing, secrets or OAuth settings. A push that auto-deploys to prod counts as a prod change. What deploys where is written in the repo's `notes` in `repos.yaml`, the workspace's `CLAUDE.md` and the repo's own `CLAUDE.md`/`AGENTS.md`: read them before you push anything.
 - **Staging and local are fine.** Local emulators, tests, evals and staging environments named in those notes are fair game for testing.
 - **Never speak for the owner.** No emails, chat messages, social posts or comments to other people, no sign-ups and no purchases. GitHub issues/comments in the owner's own repos are fine.
-- **No questions, no notifications.** Don't use AskUserQuestion, PushNotification, `send_message` or any other way to ping the owner. Whatever the owner needs to see goes in the issue (status `in-review`, a `Waiting on:` line, a Log comment); the owner checks the queue.
+- **No questions, no notifications.** Don't use AskUserQuestion, PushNotification, `send_message` or any other way to ping the owner. Whatever the owner needs to see goes in the issue (status `input-needed`, a `Waiting on:` line, a Log comment); the owner checks the queue.
 
 ## Steps
 
@@ -33,7 +33,7 @@ selection and claim/release steps below:
 - The supervisor only refreshes the claim you acquired, every five minutes,
   and provides ownership-checked cleanup if you crash.
 - Apply the same clarity, inputs, permission and reach checks from step 2 to
-  this issue. If it fails them, update only this issue: `set <n> in-review
+  this issue. If it fails them, update only this issue: `set <n> input-needed
   --card <file>` for the owner's input, `set <n> on-hold --waiting-on ...` for an
   external condition, or `set <n> backlog` for an underspecified task. Then stop.
 - Execute steps 4–6 and report step 8 for this issue only. Release your own claim
@@ -51,19 +51,19 @@ selection and claim/release steps below:
 
    Then `scripts/task.sh next --all` for the pickup queue (`ready` tasks, by priority). These are the developer's tasks: `agent:pm` issues belong to the product-manager run and are left out of `next`, `take` and `holds`; don't pick them up. Only the owner's issues are in the queue (core/MANUAL.md, "Assignee = whose task it is"): never work on an issue assigned to someone else, even one you find by number.
 
-2. **Pick the first task you can finish alone.** Go down the queue and, for each one, read the issue body and its comments in the task's own repo (`gh api repos/<owner>/<workspace>/issues/<n>` for `<n>`, `repos/<owner>/<repo>/issues/<n>` for `<repo>#<n>`, the `remote` in `repos.yaml`; and `.../comments`) plus what it links to. The owner's latest `<!-- answer -->` comment is the decision to act on; an unanswered `<!-- question -->` comes first: answer it with a new card and set `in-review`. Take it only if **all** of these hold:
+2. **Pick the first task you can finish alone.** Go down the queue and, for each one, read the issue body and its comments in the task's own repo (`gh api repos/<owner>/<workspace>/issues/<n>` for `<n>`, `repos/<owner>/<repo>/issues/<n>` for `<repo>#<n>`, the `remote` in `repos.yaml`; and `.../comments`) plus what it links to. The owner's latest `<!-- answer -->` comment is the decision to act on; an unanswered `<!-- question -->` comes first: answer it with a new card and set `input-needed`. Take it only if **all** of these hold:
    - **Clear.** Goal and Done when (or, for a task already started, Next) say what to do and how to tell it's done.
    - **Inputs on hand.** Every file, credential, account, decision and piece of data it needs exists and is reachable from this session (repos in `repos.yaml`, `gdrive/`, staging credentials, connected tools). "The owner will record / decide / log in" means it's not on hand.
    - **Within the limits.** Done when can be reached without any of the hard limits above. A prod deploy is never a step of a task (manual, **Done = landed**): if an older issue's Done when includes one, or a check on prod, drop that part and say so in the Log. If only the last step is a message to someone, it still qualifies: do everything up to that step.
    - **Within your reach.** It's doable in one session with the tools and network here.
 
-   If a task fails a check because something only the owner can supply, add a comment on the issue saying what's missing and why it blocks the run, then `scripts/task.sh set <n> in-review --card <file>` (a decision card with the exact question) so later runs skip it, and move on. If it waits on something else (another task, an event), `set <n> on-hold --waiting-on "<condition>"`. If it's just vague, comment what's unclear and `set <n> backlog`. Don't mark anything you merely didn't get to. Look at no more than 5 tasks; if none qualifies, stop and report.
+   If a task fails a check because something only the owner can supply, add a comment on the issue saying what's missing and why it blocks the run, then `scripts/task.sh set <n> input-needed --card <file>` (a decision card with the exact question) so later runs skip it, and move on. If it waits on something else (another task, an event), `set <n> on-hold --waiting-on "<condition>"`. If it's just vague, comment what's unclear and `set <n> backlog`. Don't mark anything you merely didn't get to. Look at no more than 5 tasks; if none qualifies, stop and report.
 
 3. **Claim it.** `scripts/task.sh claim <n>` and keep the claim id. If the claim fails (someone else took it), go back to step 2.
 
 4. **Do it.** Follow "Change code in a repo" in the manual and the repo's own `CLAUDE.md`/`AGENTS.md` (read it first; it wins). Work on the repo's working branch per `pr_policy`. If **Next** says the work is done and only needs verifying, verify it against Done when and fix small gaps yourself.
    - If the task turns out bigger than one run, do a solid, self-contained chunk; don't leave half-broken code on main.
-   - If it turns out to need the owner after all, stop at a clean point and go to step 7 with `in-review`.
+   - If it turns out to need the owner after all, stop at a clean point and go to step 7 with `input-needed`.
 
 5. **Test, land, verify.**
    - Run the repo's tests/lint/build for what you touched; fix failures before landing.
@@ -74,7 +74,7 @@ selection and claim/release steps below:
 
 7. **Release.** Exactly one of:
    - Done when is met and verified: `--done`.
-   - The work can't go on without the owner (a decision, an answer, an input, a message only they can send): `--to in-review --card <file>` (the decision card, manual). Never for a prod deploy or a look at landed work: landed and verified is `--done`.
+   - The work can't go on without the owner (a decision, an answer, an input, a message only they can send): `--to input-needed --card <file>` (the decision card, manual). Never for a prod deploy or a look at landed work: landed and verified is `--done`.
    - Waits on something elsewhere (CI/deploy > 30 min, another task, an event): `--to on-hold --waiting-on "<condition>"`, plus `--check-after YYYY-MM-DD` if it can't be met before then.
    - Partial: no `--to` (stays `ready`, Next says what's left).
 

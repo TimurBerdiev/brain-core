@@ -14,10 +14,11 @@
 #   scripts/task.sh release <n> [--as ID] [--to STATUS | --done | --dropped]
 #                         [--waiting-on TEXT] [--check-after YYYY-MM-DD] [--card FILE]
 #   scripts/task.sh set <n> STATUS [--waiting-on TEXT] [--check-after YYYY-MM-DD] [--card FILE]
-#                         (in-review needs --card; its question becomes the Waiting on line)
+#                         (input-needed accepts --waiting-on or an optional --card)
 #   scripts/task.sh upload <n> FILE...            store card images on branch `cards` (under <n>/), print their URLs
 #   scripts/task.sh prune                         delete claim branches of closed issues (local only)
 #
-# STATUS: in-review, ready, on-hold, backlog (open); done, dropped (close the issue).
+# STATUS: input-needed, ready, on-hold, backlog (open); done, dropped (close the issue).
+#         in-review still works: the old name of input-needed.
 exec python3 "$( dirname "${BASH_SOURCE[0]}" )/task.py" "$@"
 

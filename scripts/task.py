@@ -53,14 +53,18 @@ def workspace_root():
 ROOT = workspace_root()
 PREFIX = "claim/"
 STALE_HOURS = 2
-# Open statuses, one label each, in `list` order (what needs the owner first, backlog last).
-#   in-review  the owner's turn: an answer, a decision or an input only they can give; comes with a decision card
-#   ready  an agent's turn: picked up by `take`, worked on while claimed
+# Open statuses, one label each, in `list` order (what needs an answer first, backlog last).
+#   input-needed  someone has to answer (the assignee, else the owner)
+#   ready         an agent's turn: picked up by `take`, worked on while claimed
 #   on-hold    waits for a condition (another issue, an event, a date); agents re-check it each run
 #   backlog    an idea, or not specified enough to start; never picked up
-OPEN = ["in-review", "ready", "on-hold", "backlog"]
-# Statuses that carry a `Waiting on:` line (what the owner must do / the condition to wait for).
-NEEDS_NOTE = ("in-review", "on-hold")
+OPEN = ["input-needed", "ready", "on-hold", "backlog"]
+# Old label names still read during a switchover: `in-review` was renamed to `input-needed`.
+# A repo keeps its old label until `setup <repo> --rename-in-review` renames it, which is
+# safe once everyone working in that repo runs a core that knows `input-needed`.
+LEGACY = {"in-review": "input-needed"}
+# Statuses that carry a `Waiting on:` line (the question to answer / the condition to wait for).
+NEEDS_NOTE = ("input-needed", "on-hold")
 STATUSES = OPEN + ["done", "dropped"]  # the last two close the issue
 # Who works on a ready issue: label `agent:<name>`; no such label means the developer agent (autopilot).
 #   dev  code, tests, landing changes (the autopilot skill)
@@ -348,8 +352,23 @@ def agent(issue):
 
 def status(issue, c):
     """The issue's status label. An issue without one (e.g. made in the GitHub UI) counts as ready."""
-    found = [st for st in OPEN if st in labels(issue)]
+    names = {LEGACY.get(l, l) for l in labels(issue)}
+    found = [st for st in OPEN if st in names]
     return found[0] if found else "ready"
+
+
+_LABELS = {}
+
+
+def status_label(r, st):
+    """The label that marks status st in task repo r (None = home). A repo whose `in-review` label
+    hasn't been renamed yet keeps getting `in-review` for input-needed, so workspaces on an older
+    core still read it."""
+    if st != "input-needed":
+        return st
+    if r not in _LABELS:
+        _LABELS[r] = {l["name"] for l in (api("labels?per_page=100", paginate=True, repo_name=r) if r else api("labels?per_page=100", paginate=True))}
+    return "in-review" if "in-review" in _LABELS[r] and st not in _LABELS[r] else st
 
 
 def claimed(n, c):
@@ -387,13 +406,13 @@ def set_status(issue, st, waiting_on=None, check_after=None, keep_body=False):
         body = re.sub(r"(?m)^(Waiting on|Check after):.*\n?", "", old).lstrip("\n")
         if waiting_on:
             body = f"Waiting on: {waiting_on}\n" + (f"Check after: {check_after}\n" if check_after else "") + "\n" + body
-    names = labels(issue) - set(OPEN)
+    names = labels(issue) - set(OPEN) - set(LEGACY)
     patch = {}
     if st in ("done", "dropped"):
         if issue["state"] == "open":
             patch.update(state="closed", state_reason="completed" if st == "done" else "not_planned")
     else:
-        names.add(st)
+        names.add(status_label(issue.get("_repo"), st))
         if issue["state"] == "closed":
             patch["state"] = "open"
     if body != old or names != labels(issue) or patch:
@@ -511,7 +530,7 @@ def cmd_list(_):
             notes.append(f"on {field(i, 'Waiting on') or '?'}" + (f", check {ca}" if ca else ""))
         if claimed(n, c):
             notes.append(f"{'STALE ' if c[n][3] > STALE_HOURS else ''}claimed by {c[n][2]}, {c[n][3]:.1f}h ago")
-        tags = " ".join(sorted(labels(i) - set(OPEN) - {"p1", "p2", "p3"})
+        tags = " ".join(sorted(labels(i) - set(OPEN) - set(LEGACY) - {"p1", "p2", "p3"})
                         + [f"@{x}" for x in assignees(i)] + ([] if assignees(i) or mine(i) else ["unassigned"]))
         print(f"{ref(n):<5} {s:13} p{prio(i)}  {i['title']}" + (f"  [{tags}]" if tags else "") + (f"  ({'; '.join(notes)})" if notes else ""))
 
@@ -655,7 +674,7 @@ def cmd_worker(a):
 
 # The labels of the task system (core/MANUAL.md, "Tasks"); `setup <repo>` creates the missing ones.
 LABELS = {
-    "in-review": ("d93f0b", "Someone's turn (the assignee, else the owner): a decision card waits for an answer"),
+    "input-needed": ("d93f0b", "Someone has to answer (the assignee, else the owner)"),
     "ready": ("1d76db", "Agent's turn"),
     "on-hold": ("fbca04", "Waits for a condition (Waiting on:)"),
     "backlog": ("cfd3d7", "Idea or not specified yet; agents don't pick it up"),
@@ -685,6 +704,19 @@ def ensure_worker_labels(r=None):
 
 def cmd_setup(a):
     r = None if a.repo is None else split(parse_ref(f"{a.repo}#1"))[0]
+    kw = {"repo_name": r} if r else {}
+    existing = {l["name"] for l in api("labels?per_page=100", paginate=True, **kw)}
+    if "in-review" in existing and "input-needed" not in existing:
+        if not a.rename_in_review:
+            # Creating input-needed here would switch this repo before everyone working in it can read it.
+            ensure_labels(r, [l for l in LABELS if l != "input-needed"])
+            cmd = " ".join(["task.sh setup"] + ([a.repo] if a.repo else []) + ["--rename-in-review"])
+            print(f"labels ready in {full(r)}; it still uses in-review. Once everyone working in it runs a core "
+                  f"that knows input-needed, run `{cmd}`.")
+            return
+        color, desc = LABELS["input-needed"]
+        api("labels/in-review", "PATCH", {"new_name": "input-needed", "color": color, "description": desc}, **kw)
+        print("renamed label in-review to input-needed (it stays on every issue)", file=sys.stderr)
     ensure_labels(r)
     print(f"labels ready in {full(r)}")
 
@@ -719,15 +751,15 @@ def main():
     c.add_argument("--steal", action="store_true", help="compatibility flag; stale claims are reclaimed automatically"); c.set_defaults(fn=cmd_claim)
     r = sub.add_parser("release"); r.add_argument("number", type=parse_ref); r.add_argument("--as", dest="who")
     g = r.add_mutually_exclusive_group()
-    g.add_argument("--to", choices=STATUSES)
+    g.add_argument("--to", choices=STATUSES + list(LEGACY))
     g.add_argument("--done", dest="to", action="store_const", const="done")
     g.add_argument("--dropped", dest="to", action="store_const", const="dropped")
     r.set_defaults(fn=cmd_release)
-    st = sub.add_parser("set"); st.add_argument("number", type=parse_ref); st.add_argument("status", choices=STATUSES)
+    st = sub.add_parser("set"); st.add_argument("number", type=parse_ref); st.add_argument("status", choices=STATUSES + list(LEGACY))
     st.set_defaults(fn=cmd_set)
     for x in (r, st):
         x.add_argument("--waiting-on"); x.add_argument("--check-after")
-        x.add_argument("--card", help="decision card file (- = stdin), required with in-review")
+        x.add_argument("--card", help="optional decision card file (- = stdin) for input-needed")
     asg = sub.add_parser("assign"); asg.add_argument("number", type=parse_ref); asg.add_argument("agent", choices=AGENTS)
     asg.set_defaults(fn=cmd_assign)
     ow = sub.add_parser("assignee", help="whose task it is: me, a GitHub login, or none")
@@ -736,25 +768,29 @@ def main():
     w.set_defaults(fn=cmd_worker)
     sub.add_parser("prune").set_defaults(fn=cmd_prune)
     su = sub.add_parser("setup", help="create the task-system labels in a task repo")
-    su.add_argument("repo", nargs="?"); su.set_defaults(fn=cmd_setup)
+    su.add_argument("repo", nargs="?")
+    su.add_argument("--rename-in-review", action="store_true", help="switch this repo: rename its in-review label to input-needed")
+    su.set_defaults(fn=cmd_setup)
     up = sub.add_parser("upload"); up.add_argument("number", type=parse_ref); up.add_argument("files", nargs="+")
     up.set_defaults(fn=cmd_upload)
     a = p.parse_args()
     if a.cmd in ("release", "set"):
         if a.cmd == "release" and not a.to and a.check_after:
             a.to = "on-hold"
+        if a.cmd == "release":
+            a.to = LEGACY.get(a.to, a.to)
+        else:
+            a.status = LEGACY.get(a.status, a.status)
         s = a.to if a.cmd == "release" else a.status
-        if s == "in-review":
-            if not a.card:
-                p.error("in-review needs --card (the decision card, see core/MANUAL.md)")
+        if a.card:
+            if s != "input-needed":
+                p.error("--card goes with input-needed only")
             question, a.card = read_card(a.card)
             a.waiting_on = a.waiting_on or question
-        elif a.card:
-            p.error("--card goes with in-review only")
         if s == "on-hold" and not a.waiting_on:
             p.error("on-hold needs --waiting-on (the condition to wait for)")
         if (a.waiting_on and s not in NEEDS_NOTE) or (a.check_after and s != "on-hold"):
-            p.error("--waiting-on goes with in-review or on-hold, --check-after with on-hold only")
+            p.error("--waiting-on goes with input-needed or on-hold, --check-after with on-hold only")
     a.fn(a)
 
 
