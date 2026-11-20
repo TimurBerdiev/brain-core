@@ -93,6 +93,49 @@ def engines():
         return out
 
 
+def agent_filter():
+    """Which workstreams the developer agents pick from: the `filter:` terms of workers.yaml
+    (`[app, "-site"]`), empty (all) without one. A phone app may edit the same line."""
+    path = os.path.join(ROOT, "workers.yaml")
+    if not os.path.exists(path):
+        return []
+    with open(path) as f:
+        m = re.search(r"(?m)^filter:[ \t]*\[([^\]\n]*)\]", f.read())
+    return parse_filter(m.group(1)) if m else []
+
+
+def parse_filter(text):
+    """Filter terms from `app, -site` (commas or spaces, quotes optional); `all` = no filter."""
+    terms = [t.strip().strip("\"'").lower() for t in re.split(r"[,\s]+", text or "")]
+    return [] if terms == ["all"] else [t for t in terms if t]
+
+
+def matches(issue, terms):
+    """`name` keeps only those workstreams, `-name` drops those (issues with no workstream stay),
+    no terms keeps everything. Tools that show the same filter (a phone app) must match it the same way."""
+    only = [t for t in terms if not t.startswith("-")]
+    hidden = [t[1:] for t in terms if t.startswith("-")]
+    ws = workstreams(issue)
+    return (not only or any(w in only for w in ws)) and not any(w in hidden for w in ws)
+
+
+def describe_filter(terms):
+    """"all", "app, web", "all except site", "app, not site"."""
+    only = sorted(t for t in terms if not t.startswith("-"))
+    hidden = sorted(t[1:] for t in terms if t.startswith("-"))
+    if not only:
+        return "all except " + ", ".join(hidden) if hidden else "all"
+    return ", ".join(only) + (", not " + ", ".join(hidden) if hidden else "")
+
+
+def queue_filter(a):
+    """--ws when given (same terms; `all` lifts the filter), else workers.yaml's for the developer's
+    queue. The PM's queue is not filtered unless --ws says so."""
+    if getattr(a, "ws", None) is not None:
+        return parse_filter(a.ws)
+    return agent_filter() if getattr(a, "agent", "dev") == "dev" else []
+
+
 WORKERS = engines()
 CARD = "<!-- card -->"  # marks a decision card comment (see core/MANUAL.md, "Decision card")
 CARD_WORDS, CARD_BULLETS = 120, 5
@@ -536,17 +579,19 @@ def cmd_list(_):
 
 
 def cmd_next(a):
-    c = [i for i in candidates(issues(), claims(), a.agent) if not a.ws or a.ws in workstreams(i)]
+    terms = queue_filter(a)
+    c = [i for i in candidates(issues(), claims(), a.agent) if matches(i, terms)]
     if not c:
-        print("nothing to pick up")
+        print("nothing to pick up" + (f" (workstreams: {describe_filter(terms)})" if terms else ""))
         return
     for i in c if a.all else c[:1]:
         print(f"{key(i)}\t{i['title']}")
 
 
 def cmd_holds(a):
+    terms = queue_filter(a)
     for i in due_holds(issues(), claims(), a.agent):
-        if not a.ws or a.ws in workstreams(i):
+        if matches(i, terms):
             print(f"{key(i)}\t{i['title']}\t{field(i, 'Waiting on') or '?'}")
 
 
@@ -554,8 +599,9 @@ def cmd_take(a):
     if os.environ.get("AGENT_TASK_NUMBER") and os.environ.get("AGENT_WORKER"):
         raise SystemExit("assigned worker: use claim <AGENT_TASK_NUMBER>; do not select a different task")
     who = a.who or default_who()
+    terms = queue_filter(a)
     for i in candidates(issues(), claims(), a.agent):
-        if try_claim(key(i), who) is None:
+        if matches(i, terms) and try_claim(key(i), who) is None:
             print(f"{key(i)}\t{who}\t{i['title']}")
             return
     raise SystemExit("nothing to pick up")
@@ -734,11 +780,13 @@ def main():
     p = argparse.ArgumentParser(prog="task.sh")
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list").set_defaults(fn=cmd_list)
-    h = sub.add_parser("holds"); h.add_argument("--ws"); h.set_defaults(fn=cmd_holds)
-    nx = sub.add_parser("next"); nx.add_argument("--all", action="store_true"); nx.add_argument("--ws"); nx.set_defaults(fn=cmd_next)
+    h = sub.add_parser("holds"); h.set_defaults(fn=cmd_holds)
+    nx = sub.add_parser("next"); nx.add_argument("--all", action="store_true"); nx.set_defaults(fn=cmd_next)
     t = sub.add_parser("take"); t.add_argument("--as", dest="who"); t.set_defaults(fn=cmd_take)
     for x in (h, nx, t):
         x.add_argument("--agent", choices=AGENTS, default="dev", help="whose queue (default dev)")
+        x.add_argument("--ws", help="workstream filter, e.g. app,web, --ws=-site, or all; "
+                       "default: `filter:` in workers.yaml (developer queue only)")
     n = sub.add_parser("new"); n.add_argument("title")
     n.add_argument("--priority", type=int, choices=[1, 2, 3], default=2)
     n.add_argument("--ws", action="append", default=[]); n.add_argument("--backlog", action="store_true")

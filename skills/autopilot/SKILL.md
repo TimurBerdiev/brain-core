@@ -45,7 +45,7 @@ selection and claim/release steps below:
 
 ### Unassigned manual mode
 
-1. **Sync.** `git pull --rebase --autostash`. If the run names a workstream (e.g. `/autopilot website`), add `--ws <name>` to every `task.sh` listing below and consider only those tasks.
+1. **Sync.** `git pull --rebase --autostash`. `holds`, `next` and `take` already follow the workspace's workstream filter (`filter:` in `workers.yaml`, manual "Which workstreams agents pick"): don't pick tasks outside it. If the run names workstreams (e.g. `/autopilot website`), add `--ws <names>` to every `task.sh` listing below instead and consider only those tasks.
 
    **Re-check the holds.** `scripts/task.sh holds` lists the `on-hold` tasks due for a check. For each, read its `Waiting on:` condition and check it (the issue it names is closed, the CI run finished, the date passed, the file exists...). Met: `scripts/task.sh set <n> ready` and add a one-line comment saying what changed. Not met: leave it (if it can't be met before some date, `set <n> on-hold --waiting-on "<same>" --check-after YYYY-MM-DD` so runs stop re-checking it every hour). Just checking, no work on them here.
 
