@@ -59,4 +59,20 @@ class FixturesTest {
     @Test fun claims() = cases("claims").forEach { c ->
         assertEquals(c.getString("subject"), c.getString("holder"), claimHolder(c.getString("subject"), c.getDouble("age_hours")))
     }
+
+    @Test fun filterLines() = cases("filter", "lines").forEach { c ->
+        val want = if (c.isNull("terms")) null else c.getJSONArray("terms").strings().toSet()
+        assertEquals(c.getString("yaml"), want, dispatcherFilter(c.getString("yaml")))
+    }
+
+    @Test fun filterMatches() = cases("filter", "matches").forEach { c ->
+        val repo = c.text("repo")
+        val i = issue(c.getJSONArray("labels").strings()).copy(repo = repo?.let { "owner/$it" } ?: "", repoAlias = repo ?: "")
+        assertEquals(c.toString(), c.getBoolean("keep"), i.matches(c.getJSONArray("filter").strings().toSet()))
+    }
+
+    @Test fun filterDescribe() = cases("filter", "describe").forEach { c ->
+        val filter = c.getJSONArray("filter").strings().toSet()
+        assertEquals(filter.toString(), c.getString("text"), describeFilter(filter))
+    }
 }

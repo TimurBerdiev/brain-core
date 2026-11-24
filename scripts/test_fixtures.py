@@ -78,6 +78,25 @@ class FixtureTests(unittest.TestCase):
                 holder = found[92][2] if task.active_claim(92, found) else ""
                 self.assertEqual(holder, c["holder"])
 
+    def test_filter_lines(self):
+        for c in cases("filter", "lines"):
+            with self.subTest(c["yaml"]), tempfile.TemporaryDirectory() as d:
+                Path(d, "workers.yaml").write_text(c["yaml"])
+                with patch.object(task, "ROOT", d):
+                    self.assertEqual(sorted(task.agent_filter()), c["terms"] or [])
+
+    def test_filter_matches(self):
+        for c in cases("filter", "matches"):
+            with self.subTest(c):
+                i = issue(c["labels"])
+                i["_repo"] = c["repo"]
+                self.assertEqual(task.matches(i, c["filter"]), c["keep"])
+
+    def test_filter_describe(self):
+        for c in cases("filter", "describe"):
+            with self.subTest(c["filter"]):
+                self.assertEqual(task.describe_filter(c["filter"]), c["text"])
+
 
 if __name__ == "__main__":
     unittest.main()

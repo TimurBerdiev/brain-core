@@ -1,0 +1,33 @@
+{
+  "about": "The workstream filter: the `filter:` line of workers.yaml (task.py agent_filter + parse_filter, Model.kt dispatcherFilter), which issues it keeps (task.py matches, Model.kt Issue.matches) and how it reads (task.py describe_filter, Model.kt describeFilter). Terms are split on commas or spaces, unquoted and lowercased; `all` alone means no filter. `name` keeps only those workstreams, `-name` drops those (issues with no workstream stay). A task's workstreams are its ws: labels plus, outside the home repo (repo null), its repo's name.",
+  "lines": [
+    {"yaml": "filter: [app, \"-site\"]\n", "terms": ["-site", "app"]},
+    {"yaml": "workers: {}\nfilter: [\"-web\"]  # set by the app\n", "terms": ["-web"]},
+    {"yaml": "filter: [App, 'Web']\n", "terms": ["app", "web"]},
+    {"yaml": "filter: [app web]\n", "terms": ["app", "web"]},
+    {"yaml": "filter: []\n", "terms": []},
+    {"yaml": "filter: [all]\n", "terms": []},
+    {"yaml": "filter: [ \"all\" ]\n", "terms": []},
+    {"yaml": "workers:\n  codex: {}\n", "terms": null}
+  ],
+  "matches": [
+    {"labels": ["ws:app"], "repo": null, "filter": [], "keep": true},
+    {"labels": [], "repo": null, "filter": [], "keep": true},
+    {"labels": ["ws:app"], "repo": null, "filter": ["app", "web"], "keep": true},
+    {"labels": [], "repo": null, "filter": ["app"], "keep": false},
+    {"labels": ["ws:web"], "repo": null, "filter": ["-web"], "keep": false},
+    {"labels": [], "repo": null, "filter": ["-web"], "keep": true},
+    {"labels": ["ws:app", "ws:web"], "repo": null, "filter": ["app", "-web"], "keep": false},
+    {"labels": [], "repo": "site", "filter": ["site"], "keep": true},
+    {"labels": [], "repo": "site", "filter": ["-site"], "keep": false},
+    {"labels": ["ws:app"], "repo": "site", "filter": ["app"], "keep": true},
+    {"labels": ["ws:app"], "repo": "site", "filter": ["-site"], "keep": false}
+  ],
+  "describe": [
+    {"filter": [], "text": "All"},
+    {"filter": ["-site"], "text": "All except site"},
+    {"filter": ["-web", "-app"], "text": "All except app, web"},
+    {"filter": ["web", "app"], "text": "app, web"},
+    {"filter": ["web", "-app"], "text": "web, not app"}
+  ]
+}
