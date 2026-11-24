@@ -122,7 +122,7 @@ Offer to run the [autopilot](skills/autopilot/SKILL.md) skill now, in this sessi
 
 - **What happened:** the claim, the work, how it landed, the Log comment, the release.
 - **What to sharpen:** if the agent hesitated, guessed or asked for something it should have known, add one line to `CLAUDE.md` or the repo's `notes`.
-- If the task ended in `input-needed`, show the owner how to answer a card: a comment starting with `<!-- answer -->`, then label `ready` again (or `scripts/task.sh set <n> ready`). This also works from the GitHub mobile app.
+- If the task ended in `input-needed`, show the owner how to answer a card: a comment starting with `<!-- answer -->`, then label `ready` again (or `scripts/task.sh set <n> ready`). This also works from the GitHub mobile app; on Android the [Boss app](boss/README.md) does it with one tap and adds a home-screen widget of what waits on them. Offer its install steps.
 
 ## Step 8: Running on its own (optional)
 

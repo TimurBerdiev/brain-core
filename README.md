@@ -36,6 +36,7 @@ A personal Brain (command center) for working with coding agents (Claude Code, C
 - **A task queue on GitHub issues** (`scripts/task.sh`): statuses as labels, race-safe claims as commits on `claim/<n>` branches, decision cards when an agent needs your answer. One queue across your Brain repo and any repo marked `tasks: true`; in a repo shared with others (`tasks: assigned`) each person's agents take only the issues assigned to them.
 - **Repo registry** (`repos.yaml` + `scripts/sync-repos.sh`): every repo with its working branch and `pr_policy`.
 - **Skills**: `autopilot` (do the next task end to end, unattended) and `help-human` (turn a fuzzy idea into a plan, one question at a time).
+- **Boss, the phone app** ([boss/](boss/README.md)): an Android app and widget for the same queue. Answer decision cards with one tap, move tasks, watch agent runs and activity. It talks to GitHub with your own token; no server. Install the APK from [Releases](https://github.com/rawmahn/brain-core/releases/latest).
 
 Your Brain mounts this repo at `core/` as a [git subtree](https://github.com/git/git/blob/master/contrib/subtree/git-subtree.adoc), so every clone, cloud session and CI job has it with no extra step. Your own notes and rules stay in your Brain; `core/` stays shared.
 
