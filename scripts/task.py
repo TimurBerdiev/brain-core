@@ -106,8 +106,8 @@ def agent_filter():
 
 def parse_filter(text):
     """Filter terms from `app, -site` (commas or spaces, quotes optional); `all` = no filter."""
-    terms = [t.strip().strip("\"'").lower() for t in re.split(r"[,\s]+", text or "")]
-    return [] if terms == ["all"] else [t for t in terms if t]
+    terms = [t for t in (t.strip().strip("\"'").lower() for t in re.split(r"[,\s]+", text or "")) if t]
+    return [] if terms == ["all"] else terms
 
 
 def matches(issue, terms):
@@ -120,11 +120,11 @@ def matches(issue, terms):
 
 
 def describe_filter(terms):
-    """"all", "app, web", "all except site", "app, not site"."""
+    """"All", "app, web", "All except site", "app, not site" (the Boss app shows the same words)."""
     only = sorted(t for t in terms if not t.startswith("-"))
     hidden = sorted(t[1:] for t in terms if t.startswith("-"))
     if not only:
-        return "all except " + ", ".join(hidden) if hidden else "all"
+        return "All except " + ", ".join(hidden) if hidden else "All"
     return ", ".join(only) + (", not " + ", ".join(hidden) if hidden else "")
 
 

@@ -69,7 +69,7 @@ class QueueTests(unittest.TestCase):
     def test_filter_terms_and_description(self):
         self.assertEqual(task.parse_filter('app, "-site"'), ["app", "-site"])
         self.assertEqual(task.parse_filter("all"), [])
-        self.assertEqual(task.describe_filter(["-site"]), "all except site")
+        self.assertEqual(task.describe_filter(["-site"]), "All except site")
         self.assertEqual(task.describe_filter(["web", "-app"]), "web, not app")
 
     def test_due_holds_recover_expired_claims_and_respect_dates(self):

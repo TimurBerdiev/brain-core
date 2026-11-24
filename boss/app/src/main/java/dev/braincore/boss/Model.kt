@@ -238,9 +238,14 @@ fun describeFilter(filter: Set<String>): String {
 private val FILTER_LINE = Regex("(?m)^filter:[ \\t]*\\[([^\\]\\n]*)\\][ \\t]*(#.*)?$")
 private val FILTER_TERM = Regex("-?[a-z0-9][a-z0-9-]{0,49}")
 
-/** The dispatcher's filter from workers.yaml (`filter: [app, "-site"]`), or null without that line. */
-fun dispatcherFilter(yaml: String): Set<String>? = FILTER_LINE.find(yaml)?.groupValues?.get(1)
-    ?.split(',')?.map { it.trim().trim('"', '\'') }?.filter { it.isNotEmpty() }?.toSet()
+/**
+ * The dispatcher's filter from workers.yaml (`filter: [app, "-site"]`), or null without that line. Read the way task.py's
+ * parse_filter reads it: commas or spaces, quotes optional, lowercased; `all` alone means no filter.
+ */
+fun dispatcherFilter(yaml: String): Set<String>? = FILTER_LINE.find(yaml)?.groupValues?.get(1)?.let { list ->
+    val terms = list.split(Regex("[,\\s]+")).map { it.trim().trim('"', '\'').lowercase() }.filter { it.isNotEmpty() }
+    if (terms == listOf("all")) emptySet() else terms.toSet()
+}
 
 /** workers.yaml with its `filter:` line replaced; null if it has none, or a term the dispatcher would reject. */
 fun withDispatcherFilter(yaml: String, filter: Set<String>): String? {
