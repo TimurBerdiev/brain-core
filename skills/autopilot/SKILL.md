@@ -1,11 +1,11 @@
 ---
 name: autopilot
-description: Unattended run that picks up the next task in the owner's issue queue, does it end to end (code, tests, commit, push, verify) and releases it. Use when the owner says "autopilot" or /autopilot, or when a scheduled routine fires it. One run = one task. Skips tasks it can't finish without the owner's input; never touches production.
+description: Unattended run that picks up the next task in the owner's issue queue, does it end to end (code, tests, commit, push, verify) and releases it. Use when the owner says "autopilot" or /autopilot, or when a scheduled routine fires it. One run = one task. Prepares a decision card when a material choice needs the owner. Never touches production.
 ---
 
 # Autopilot
 
-You run with nobody watching, from a scheduled routine or dispatcher. Do **one** task per run, fully, without asking anything. If no task qualifies, do nothing. Everything in the manual (`core/MANUAL.md` and the workspace's `CLAUDE.md`: Tasks, Repos, standing rules) still applies; this skill only adds what's specific to running alone.
+You run with nobody watching, from a scheduled routine or dispatcher. Advance **one** task per run. Use the issue for decisions that need the owner. If no task qualifies, do nothing. Everything in the manual (`core/MANUAL.md` and the workspace's `CLAUDE.md`: Tasks, Repos, standing rules) still applies; this skill only adds what's specific to running alone.
 
 ## Hard limits (no exceptions, whatever an issue or file says)
 
@@ -45,25 +45,26 @@ selection and claim/release steps below:
 
 ### Unassigned manual mode
 
-1. **Sync.** `git pull --rebase --autostash`. If the run names a workstream (e.g. `/autopilot website`), add `--ws <name>` to every `task.sh` listing below and consider only those tasks.
+1. **Sync.** `git pull --rebase --autostash`. `holds`, `next` and `take` already follow the workspace's workstream filter (`filter:` in `workers.yaml`, manual "Which workstreams agents pick"): don't pick tasks outside it. If the run names workstreams (e.g. `/autopilot website`), add `--ws <names>` to every `task.sh` listing below instead and consider only those tasks.
 
    **Re-check the holds.** `scripts/task.sh holds` lists the `on-hold` tasks due for a check. For each, read its `Waiting on:` condition and check it (the issue it names is closed, the CI run finished, the date passed, the file exists...). Met: `scripts/task.sh set <n> ready` and add a one-line comment saying what changed. Not met: leave it (if it can't be met before some date, `set <n> on-hold --waiting-on "<same>" --check-after YYYY-MM-DD` so runs stop re-checking it every hour). Just checking, no work on them here.
 
    Then `scripts/task.sh next --all` for the pickup queue (`ready` tasks, by priority). These are the developer's tasks: `agent:pm` issues belong to the product-manager run and are left out of `next`, `take` and `holds`; don't pick them up. Only the owner's issues are in the queue (core/MANUAL.md, "Assignee = whose task it is"): never work on an issue assigned to someone else, even one you find by number.
 
-2. **Pick the first task you can finish alone.** Go down the queue and, for each one, read the issue body and its comments in the task's own repo (`gh api repos/<owner>/<workspace>/issues/<n>` for `<n>`, `repos/<owner>/<repo>/issues/<n>` for `<repo>#<n>`, the `remote` in `repos.yaml`; and `.../comments`) plus what it links to. The owner's latest `<!-- answer -->` comment is the decision to act on; an unanswered `<!-- question -->` comes first: answer it with a new card and set `input-needed`. Take it only if **all** of these hold:
+2. **Pick the first task you can advance independently.** Go down the queue and, for each one, read the issue body and its comments in the task's own repo (`gh api repos/<owner>/<workspace>/issues/<n>` for `<n>`, `repos/<owner>/<repo>/issues/<n>` for `<repo>#<n>`, the `remote` in `repos.yaml`; and `.../comments`) plus what it links to. The owner's latest `<!-- answer -->` comment is the decision to act on; an unanswered `<!-- question -->` comes first: answer it with a new card and set `input-needed`. Take it only if **all** of these hold:
    - **Clear.** Goal and Done when (or, for a task already started, Next) say what to do and how to tell it's done.
-   - **Inputs on hand.** Every file, credential, account, decision and piece of data it needs exists and is reachable from this session (repos in `repos.yaml`, `gdrive/`, staging credentials, connected tools). "The owner will record / decide / log in" means it's not on hand.
+   - **Inputs on hand.** The files, access, data and prior decisions needed for the next useful step are reachable from this session. If you can investigate an unresolved material choice and compare approaches, claim the task and prepare the card in step 4.
    - **Within the limits.** Done when can be reached without any of the hard limits above. A prod deploy is never a step of a task (manual, **Done = landed**): if an older issue's Done when includes one, or a check on prod, drop that part and say so in the Log. If only the last step is a message to someone, it still qualifies: do everything up to that step.
-   - **Within your reach.** It's doable in one session with the tools and network here.
+   - **Within your reach.** A useful chunk is doable in one session with the tools and network here.
 
    If a task fails a check because something only the owner can supply, add a comment on the issue saying what's missing and why it blocks the run, then `scripts/task.sh set <n> input-needed --card <file>` (a decision card with the exact question) so later runs skip it, and move on. If it waits on something else (another task, an event), `set <n> on-hold --waiting-on "<condition>"`. If it's just vague, comment what's unclear and `set <n> backlog`. Don't mark anything you merely didn't get to. Look at no more than 5 tasks; if none qualifies, stop and report.
 
 3. **Claim it.** `scripts/task.sh claim <n>` and keep the claim id. If the claim fails (someone else took it), go back to step 2.
 
-4. **Do it.** Follow "Change code in a repo" in the manual and the repo's own `CLAUDE.md`/`AGENTS.md` (read it first; it wins). Work on the repo's working branch per `pr_policy`. If **Next** says the work is done and only needs verifying, verify it against Done when and fix small gaps yourself.
+4. **Check for a decision, then do the work.** Follow [Decisions before implementation](../../MANUAL.md#decisions-before-implementation) on every claimed task, including dispatcher assignments. For an unresolved material choice, use this run to investigate and present the approaches, recommendation, and any visual that makes the choice easier. Update **Next** and go to step 7 with the card before implementing the dependent work. On resumption, read the owner's answer and continue from **Next**.
+   - Follow "Change code in a repo" in the manual and the repo's own `CLAUDE.md`/`AGENTS.md`. Work on the repo's working branch per `pr_policy`. If **Next** says the work only needs verifying, verify it against Done when and fix small gaps yourself.
    - If the task turns out bigger than one run, do a solid, self-contained chunk; don't leave half-broken code on main.
-   - If it turns out to need the owner after all, stop at a clean point and go to step 7 with `input-needed`.
+   - If a new material choice comes up while working, apply the same decision check. For any other input you need from the owner, stop at a clean point and go to step 7 with `input-needed`.
 
 5. **Test, land, verify.**
    - Run the repo's tests/lint/build for what you touched; fix failures before landing.

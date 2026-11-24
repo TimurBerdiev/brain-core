@@ -44,6 +44,34 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(out.getvalue(), "49\ttask 49\n")
         push.assert_not_called()
 
+    def test_workers_yaml_filter_decides_the_developer_queue(self):
+        xs = [issue(1, "ready", "ws:app"), issue(2, "ready", "ws:web"), issue(3, "ready"), issue(4, "ready", "agent:pm", "ws:web")]
+        def run(cmd, yaml_text, **kw):
+            out = io.StringIO()
+            with tempfile.TemporaryDirectory() as d:
+                if yaml_text is not None:
+                    Path(d, "workers.yaml").write_text(yaml_text)
+                args = types.SimpleNamespace(**{"agent": "dev", "ws": None, "all": True, "who": "me", **kw})
+                with patch.object(task, "ROOT", d), patch.object(task, "issues", return_value=xs), \
+                        patch.object(task, "claims", return_value={}), \
+                        patch.object(task, "try_claim", return_value=None), contextlib.redirect_stdout(out):
+                    cmd(args)
+            return [int(l.split("\t")[0]) for l in out.getvalue().splitlines() if l[:1].isdigit()]
+        self.assertEqual(run(task.cmd_next, None), [1, 2, 3])
+        self.assertEqual(run(task.cmd_next, 'workers: {}\nfilter: ["-web"]  # Boss\n'), [1, 3])
+        self.assertEqual(run(task.cmd_next, "filter: [app, web]\n"), [1, 2])
+        self.assertEqual(run(task.cmd_next, "filter: []\n"), [1, 2, 3])
+        self.assertEqual(run(task.cmd_next, "filter: [-web]\n", ws="web"), [2])
+        self.assertEqual(run(task.cmd_next, "filter: [-web]\n", ws="all"), [1, 2, 3])
+        self.assertEqual(run(task.cmd_next, "filter: [app]\n", agent="pm"), [4])
+        self.assertEqual(run(task.cmd_take, "filter: [-app]\n"), [2])
+
+    def test_filter_terms_and_description(self):
+        self.assertEqual(task.parse_filter('app, "-site"'), ["app", "-site"])
+        self.assertEqual(task.parse_filter("all"), [])
+        self.assertEqual(task.describe_filter(["-site"]), "all except site")
+        self.assertEqual(task.describe_filter(["web", "-app"]), "web, not app")
+
     def test_due_holds_recover_expired_claims_and_respect_dates(self):
         xs = [issue(1, "on-hold"), issue(2, "on-hold"), issue(3, "on-hold")]
         xs[2]["body"] = "Check after: " + str(datetime.date.today() + datetime.timedelta(days=1))
