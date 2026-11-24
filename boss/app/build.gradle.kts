@@ -44,7 +44,11 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
         // Robolectric downloads its Android jars at test time; same Maven Central mirror as in settings.gradle.kts.
-        unitTests.all { it.systemProperty("robolectric.dependency.repo.url", "https://maven-central.storage-download.googleapis.com/maven2") }
+        unitTests.all {
+            it.systemProperty("robolectric.dependency.repo.url", "https://maven-central.storage-download.googleapis.com/maven2")
+            // The task format cases shared with scripts/task.py (FixturesTest).
+            it.systemProperty("fixtures", rootProject.file("../tests/fixtures").absolutePath)
+        }
     }
 }
 

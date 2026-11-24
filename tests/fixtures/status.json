@@ -1,0 +1,18 @@
+{
+  "about": "An open issue's status from its labels (task.py status, Model.kt Issue.status), and the Waiting on / Check after lines of its body (task.py field, Model.kt field). The first open status in the order input-needed, ready, on-hold, backlog wins; no status label means ready; in-review is the old name of input-needed.",
+  "cases": [
+    {"labels": [], "status": "ready"},
+    {"labels": ["p1", "ws:app"], "status": "ready"},
+    {"labels": ["on-hold", "p2"], "status": "on-hold"},
+    {"labels": ["backlog", "agent:pm"], "status": "backlog"},
+    {"labels": ["in-review"], "status": "input-needed"},
+    {"labels": ["backlog", "ready"], "status": "ready"},
+    {"labels": ["backlog", "input-needed", "on-hold"], "status": "input-needed"}
+  ],
+  "fields": [
+    {"body": "Waiting on: #20 (Reddit)  \nCheck after: 2026-12-01\n\n## Goal\nx", "waiting_on": "#20 (Reddit)", "check_after": "2026-12-01"},
+    {"body": "## Goal\nWaiting on: a line further down counts too", "waiting_on": "a line further down counts too", "check_after": ""},
+    {"body": "## Goal\nx\n> Waiting on: quoted, not a field", "waiting_on": "", "check_after": ""},
+    {"body": "", "waiting_on": "", "check_after": ""}
+  ]
+}
