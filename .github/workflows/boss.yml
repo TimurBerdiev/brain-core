@@ -1,0 +1,65 @@
+name: Boss app
+
+on:
+  push:
+    branches: [main]
+    paths: ['boss/**', 'scripts/**', '.github/workflows/boss.yml']
+  pull_request:
+    paths: ['boss/**', 'scripts/**', '.github/workflows/boss.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install pyyaml
+      - name: Task script tests
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+
+  app:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: boss
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Signing key
+        # Only on main pushes in this repo; PRs and forks build with the debug key and publish nothing.
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          KEYSTORE_B64: ${{ secrets.BOSS_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/boss.keystore"
+            echo "BOSS_KEYSTORE_FILE=$RUNNER_TEMP/boss.keystore" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No BOSS_KEYSTORE_B64 secret: the APK is debug-signed and is not released."
+          fi
+      - name: Test and build
+        env:
+          BOSS_KEYSTORE_PASSWORD: ${{ secrets.BOSS_KEYSTORE_PASSWORD }}
+        run: ./gradlew --no-daemon testDebugUnitTest assembleRelease
+      - name: Keep the screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: screens
+          path: boss/app/build/screens/
+      - run: cp app/build/outputs/apk/release/app-release.apk boss.apk
+      - name: Release
+        if: github.ref == 'refs/heads/main' && env.BOSS_KEYSTORE_FILE != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: boss-${{ github.run_number }}
+          name: Boss ${{ github.run_number }}
+          body: Built from ${{ github.sha }}.
+          files: boss/boss.apk
+          make_latest: true

@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Boss</string>
+    <string name="widget_name">Boss: for you</string>
+    <string name="widget_description">Tasks waiting on you; tap one to answer it</string>
+</resources>
