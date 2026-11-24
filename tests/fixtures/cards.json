@@ -1,0 +1,97 @@
+{
+  "about": "Decision cards (MANUAL.md, 'Questions and decision cards'). card: the file given to `task.sh ... --card`, one string per line. valid: task.py's read_card accepts it (heading first, at most 120 words and 5 bullets; link targets and URLs don't count). question / options / recommend: what the Boss app shows (Model.kt parseCard); task.py's question is checked too when valid.",
+  "cases": [
+    {
+      "name": "full card",
+      "card": [
+        "### Which subtitle preset should be the default?",
+        "Options: Pop | Glide |  Reveal | Bar",
+        "Recommend: Pop, it reads best on a phone",
+        "",
+        "- **Pop**: calm, readable ![pop](https://github.com/alex/brain/raw/cards/36/pop.png)",
+        "- Glide is the calmest",
+        "",
+        "[Log](https://github.com/alex/brain/issues/36) · [diff](https://github.com/alex/brain/compare/a...b)"
+      ],
+      "valid": true,
+      "question": "Which subtitle preset should be the default?",
+      "options": ["Pop", "Glide", "Reveal", "Bar"],
+      "recommend": "Pop, it reads best on a phone"
+    },
+    {
+      "name": "no options means yes / no",
+      "card": ["### Ship the new onboarding?", "", "- Sign-ups take one screen less"],
+      "valid": true,
+      "question": "Ship the new onboarding?",
+      "options": [],
+      "recommend": ""
+    },
+    {
+      "name": "empty options are dropped",
+      "card": ["### Which account?", "Options: Personal || Company |", "Recommend: Company"],
+      "valid": true,
+      "question": "Which account?",
+      "options": ["Personal", "Company"],
+      "recommend": "Company"
+    },
+    {
+      "name": "blank lines before the heading are fine",
+      "card": ["", "", "### Keep the old export?", "Options: Keep | Drop"],
+      "valid": true,
+      "question": "Keep the old export?",
+      "options": ["Keep", "Drop"],
+      "recommend": ""
+    },
+    {
+      "name": "no heading",
+      "card": ["Which one do we keep?", "Options: A | B"],
+      "valid": false,
+      "question": "",
+      "options": ["A", "B"],
+      "recommend": ""
+    },
+    {
+      "name": "text before the heading",
+      "card": ["Context first.", "### Which one?", "Options: A | B"],
+      "valid": false,
+      "question": "Which one?",
+      "options": ["A", "B"],
+      "recommend": ""
+    },
+    {
+      "name": "six bullets",
+      "card": ["### Go with these?", "Options: All | Change some", "- one", "- two", "- three", "* four", "- five", "  - six"],
+      "valid": false,
+      "question": "Go with these?",
+      "options": ["All", "Change some"],
+      "recommend": ""
+    },
+    {
+      "name": "121 words",
+      "card": [
+        "### Too long?",
+        "one two three four five six seven eight nine ten one two three four five six seven eight nine ten one two three four five six seven eight nine ten one two three four five six seven eight nine ten one two three four five six seven eight nine ten",
+        "one two three four five six seven eight nine ten one two three four five six seven eight nine ten one two three four five six seven eight nine ten one two three four five six seven eight nine ten one two three four five six seven eight nine ten",
+        "one two three four five six seven eight nine ten one two three four five six seven eight nine"
+      ],
+      "valid": false,
+      "question": "Too long?",
+      "options": [],
+      "recommend": ""
+    },
+    {
+      "name": "120 words with links: targets and URLs don't count",
+      "card": [
+        "### Long but fine?",
+        "one two three four five six seven eight nine ten one two three four five six seven eight nine ten one two three four five six seven eight nine ten one two three four five six seven eight nine ten one two three four five six seven eight nine ten",
+        "one two three four five six seven eight nine ten one two three four five six seven eight nine ten one two three four five six seven eight nine ten one two three four five six seven eight nine ten one two three four five six seven eight nine ten",
+        "one two three four five six seven eight nine ten one two three four five",
+        "![](https://github.com/alex/brain/raw/cards/9/a.png) [Log](https://github.com/alex/brain/issues/9) https://example.com/a/very/long/path"
+      ],
+      "valid": true,
+      "question": "Long but fine?",
+      "options": [],
+      "recommend": ""
+    }
+  ]
+}
