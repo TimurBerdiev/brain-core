@@ -1,0 +1,10 @@
+{
+  "about": "Who holds a task: the subject of the tip commit of its claim/<n> branch and that commit's age (task.py claims + active_claim, Model.kt claimHolder). `claim #<n> by <id>` holds it for 2 hours; a release, or anything else, holds nothing.",
+  "cases": [
+    {"subject": "claim #92 by laptop#a1b2c3", "age_hours": 0.5, "holder": "laptop#a1b2c3"},
+    {"subject": "claim #92 by worker-7 (refresh)", "age_hours": 1.9, "holder": "worker-7"},
+    {"subject": "claim #92 by worker-7", "age_hours": 2.1, "holder": ""},
+    {"subject": "release #92 by worker-7", "age_hours": 0.1, "holder": ""},
+    {"subject": "Merge branch 'main'", "age_hours": 0.1, "holder": ""}
+  ]
+}

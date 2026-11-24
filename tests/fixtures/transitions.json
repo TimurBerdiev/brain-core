@@ -1,0 +1,47 @@
+{
+  "about": "A status change (task.sh set / release --to, the Boss app's Move): the issue before, the new status and note, and the issue after. The old status label is swapped for the new one (none when closing; labels sorted), Waiting on / Check after lines are rewritten at the top of the body, done / dropped close the issue as completed / not_planned (state_reason is checked only for a closed result), any open status reopens it.",
+  "cases": [
+    {
+      "name": "ready to on-hold with a check date",
+      "before": {"state": "open", "labels": ["ws:app", "ready", "p1"], "body": "## Goal\nx"},
+      "to": "on-hold", "waiting_on": "#20 is closed", "check_after": "2026-12-01",
+      "after": {"state": "open", "state_reason": null, "labels": ["on-hold", "p1", "ws:app"], "body": "Waiting on: #20 is closed\nCheck after: 2026-12-01\n\n## Goal\nx"}
+    },
+    {
+      "name": "answered: input-needed back to ready drops the Waiting on line",
+      "before": {"state": "open", "labels": ["input-needed"], "body": "Waiting on: Which account?\n\n## Goal\nx"},
+      "to": "ready", "waiting_on": null, "check_after": null,
+      "after": {"state": "open", "state_reason": null, "labels": ["ready"], "body": "## Goal\nx"}
+    },
+    {
+      "name": "a new note replaces the old lines",
+      "before": {"state": "open", "labels": ["on-hold"], "body": "Waiting on: old\nCheck after: 2026-01-01\n\nbody"},
+      "to": "input-needed", "waiting_on": "new", "check_after": null,
+      "after": {"state": "open", "state_reason": null, "labels": ["input-needed"], "body": "Waiting on: new\n\nbody"}
+    },
+    {
+      "name": "the old in-review label goes too",
+      "before": {"state": "open", "labels": ["p3", "in-review"], "body": "Waiting on: ok?\n"},
+      "to": "backlog", "waiting_on": null, "check_after": null,
+      "after": {"state": "open", "state_reason": null, "labels": ["backlog", "p3"], "body": ""}
+    },
+    {
+      "name": "done closes as completed",
+      "before": {"state": "open", "labels": ["ready", "ws:app"], "body": "## Goal\nx"},
+      "to": "done", "waiting_on": null, "check_after": null,
+      "after": {"state": "closed", "state_reason": "completed", "labels": ["ws:app"], "body": "## Goal\nx"}
+    },
+    {
+      "name": "dropped closes as not planned",
+      "before": {"state": "open", "labels": ["backlog"], "body": ""},
+      "to": "dropped", "waiting_on": null, "check_after": null,
+      "after": {"state": "closed", "state_reason": "not_planned", "labels": [], "body": ""}
+    },
+    {
+      "name": "an open status reopens a closed issue",
+      "before": {"state": "closed", "state_reason": "completed", "labels": ["p1"], "body": "## Goal\nx"},
+      "to": "ready", "waiting_on": null, "check_after": null,
+      "after": {"state": "open", "state_reason": null, "labels": ["p1", "ready"], "body": "## Goal\nx"}
+    }
+  ]
+}

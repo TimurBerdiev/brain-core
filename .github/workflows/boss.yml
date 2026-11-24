@@ -3,9 +3,9 @@ name: Boss app
 on:
   push:
     branches: [main]
-    paths: ['boss/**', 'scripts/**', '.github/workflows/boss.yml']
+    paths: ['boss/**', 'scripts/**', 'tests/**', '.github/workflows/boss.yml']
   pull_request:
-    paths: ['boss/**', 'scripts/**', '.github/workflows/boss.yml']
+    paths: ['boss/**', 'scripts/**', 'tests/**', '.github/workflows/boss.yml']
   workflow_dispatch:
 
 permissions:

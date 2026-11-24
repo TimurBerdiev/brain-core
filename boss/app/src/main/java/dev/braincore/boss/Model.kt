@@ -132,6 +132,22 @@ fun labelsFor(labels: List<String>, status: String): List<String> {
     return (if (status in OPEN) kept + status else kept).sorted()
 }
 
+/** What a status change writes: the new body and labels, plus state / state_reason when it closes or reopens the issue. */
+data class StatusChange(val body: String, val labels: List<String>, val state: String? = null, val stateReason: String? = null)
+
+/** The change `scripts/task.py set_status` makes: done / dropped close as completed / not_planned, an open status reopens. */
+fun statusChange(issue: Issue, status: String, waitingOn: String? = null, checkAfter: String? = null): StatusChange {
+    val body = bodyFor(issue.body, waitingOn, checkAfter)
+    val labels = labelsFor(issue.labels, status)
+    return when {
+        status == "done" || status == "dropped" -> if (issue.state == "open")
+            StatusChange(body, labels, "closed", if (status == "done") "completed" else "not_planned")
+        else StatusChange(body, labels)
+        issue.state == "closed" -> StatusChange(body, labels, "open")
+        else -> StatusChange(body, labels)
+    }
+}
+
 private fun quote(question: String) = question.lines().joinToString("\n") { "> $it" }
 
 fun answerComment(question: String, choice: String?, note: String): String = buildString {

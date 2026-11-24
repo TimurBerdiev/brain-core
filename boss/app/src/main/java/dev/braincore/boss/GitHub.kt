@@ -114,14 +114,10 @@ class GitHub(
 
     /** Same effect as `scripts/task.sh set <n> <status>`: swap the label, close/reopen, rewrite the Waiting on lines. */
     suspend fun setStatus(issue: Issue, status: String, waitingOn: String? = null, checkAfter: String? = null) {
-        val patch = JSONObject()
-            .put("body", bodyFor(issue.body, waitingOn, checkAfter))
-            .put("labels", JSONArray(labelsFor(issue.labels, status)))
-        when {
-            status == "done" || status == "dropped" -> if (issue.state == "open")
-                patch.put("state", "closed").put("state_reason", if (status == "done") "completed" else "not_planned")
-            issue.state == "closed" -> patch.put("state", "open")
-        }
+        val change = statusChange(issue, status, waitingOn, checkAfter)
+        val patch = JSONObject().put("body", change.body).put("labels", JSONArray(change.labels))
+        change.state?.let { patch.put("state", it) }
+        change.stateReason?.let { patch.put("state_reason", it) }
         call("PATCH", "issues/${issue.number}", patch)
     }
 
