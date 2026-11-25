@@ -2,6 +2,7 @@ package dev.braincore.boss
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.setValue
@@ -21,6 +22,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.onRoot
@@ -322,6 +324,16 @@ class ScreenshotTest {
         rule.onNodeWithText("ABCD-1234").assertIsDisplayed()
         rule.onNodeWithText("Copy code and open GitHub").performClick()
         assertEquals(true, opened)
+    }
+
+    @Test fun canReconnectWithoutUndoingAWorkspaceEdit() {
+        val app = GitHubAppRegistration("Iv23Example", "boss-example")
+        rule.activity.getSharedPreferences("boss", Context.MODE_PRIVATE).edit()
+            .putString("repo", "alex/brain").putString("github_app_connection", "previous").commit()
+        shoot("github-app-reconnect") { SettingsScreen(canClose = true, onClose = {}, onSaved = {}, registration = app) }
+        rule.onNode(hasSetTextAction()).performTextReplacement("alex/new-brain")
+        rule.onNodeWithText("Reconnect with GitHub").assertIsDisplayed()
+        rule.onNodeWithText("Save repository").assertIsDisplayed()
     }
 
     @Test fun askAiPicker() = shoot("ask-ai-picker") {

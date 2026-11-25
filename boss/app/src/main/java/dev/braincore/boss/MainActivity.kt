@@ -105,7 +105,7 @@ class MainActivity : ComponentActivity() {
 
     /** A task key ([Issue.key]); widgets placed by older versions still send the bare issue number. */
     private fun issueFrom(intent: Intent?): String? = intent?.let {
-        if (it.getStringExtra(EXTRA_WORKSPACE)?.equals(Store.repo(this), ignoreCase = true) == false) return null
+        if (it.getStringExtra(EXTRA_WORKSPACE)?.equals(Store.repo(this), ignoreCase = true) == false) return@let null
         it.getStringExtra(EXTRA_ISSUE) ?: it.getIntExtra(EXTRA_ISSUE, 0).takeIf { n -> n > 0 }?.toString()
     }
 
@@ -514,7 +514,7 @@ internal fun SettingsScreen(
                             modifier = Modifier.fillMaxWidth().height(48.dp),
                             onClick = {
                                 perform {
-                                    val tokens = pendingTokens ?: if (useSavedApp && draftRepo != Store.repo(ctx)) null else {
+                                    val tokens = pendingTokens ?: run {
                                         val code = signIn.start()
                                         deviceCode = code
                                         signIn.authorize(code).also {
@@ -528,10 +528,14 @@ internal fun SettingsScreen(
                         ) {
                             Text(when {
                                 pendingTokens != null -> "Check installation and connect"
-                                savedApp && draftRepo != Store.repo(ctx) -> "Save repository"
                                 savedApp -> "Reconnect with GitHub"
                                 else -> "Connect with GitHub"
                             })
+                        }
+                        if (useSavedApp && draftRepo != Store.repo(ctx) && pendingTokens == null) {
+                            TextButton(enabled = !busy && validRepo, onClick = { perform { finishAppConnection(null) } }) {
+                                Text("Save repository")
+                            }
                         }
                         TextButton(enabled = !busy, onClick = { openGitHub(registration.installUrl) }) {
                             Text(if (savedApp) "Manage GitHub App access" else "Install GitHub App on your repositories")
