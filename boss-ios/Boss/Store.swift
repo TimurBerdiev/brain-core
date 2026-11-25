@@ -135,7 +135,9 @@ final class AppModel: ObservableObject {
     /// Every issue in every task repo, for search.
     func allIssues() async throws -> [Issue] {
         var out: [Issue] = []
-        for src in sources { out += try await src.allIssues() }
+        for (i, src) in sources.enumerated() {
+            do { out += try await src.allIssues() } catch { if i == 0 { throw error } }
+        }
         return out
     }
 
