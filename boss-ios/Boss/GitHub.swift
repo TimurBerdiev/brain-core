@@ -116,8 +116,11 @@ struct GitHubRepo: TaskSource {
 
     /// Same effect as `scripts/task.sh set <n> <status>`.
     func setStatus(_ issue: Issue, _ status: String, waitingOn: String?, checkAfter: String?) async throws {
-        // Start from GitHub's current body and labels so edits made since the screen loaded are kept.
-        let change = statusChange(try await self.issue(issue.number), status, waitingOn: waitingOn, checkAfter: checkAfter)
+        // Start from GitHub's current body and labels so edits made since the screen loaded are kept,
+        // and leave a task someone closed meanwhile closed rather than reopening it.
+        let current = try await self.issue(issue.number)
+        if current.state == "closed" && issue.state == "open" && OPEN.contains(status) { return }
+        let change = statusChange(current, status, waitingOn: waitingOn, checkAfter: checkAfter)
         var patch: [String: Any] = ["body": change.body, "labels": change.labels]
         if let s = change.state { patch["state"] = s }
         if let r = change.stateReason { patch["state_reason"] = r }
