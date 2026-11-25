@@ -56,3 +56,24 @@ test('workspace discovery, issue paging, fresh card reply and authenticated imag
   URL.revokeObjectURL(url);
   assert.equal(await client.image('https://example.org/evidence.png'), 'https://example.org/evidence.png');
 });
+
+test('search and completed discover task repos on a fresh connection without a queue refresh', async t => {
+  let registryReads = 0;
+  t.mock.method(globalThis, 'fetch', async (url, { headers }) => {
+    assert.equal(headers.Authorization, 'Bearer replacement-token');
+    switch (url.pathname) {
+      case '/repos/owner/brain/contents/repos.yaml':
+        registryReads++;
+        return Response.json(yamlFile('repos: { site: { remote: "https://github.com/owner/web", tasks: true } }'));
+      case '/repos/owner/brain/contents/workspace.yaml': return Response.json(yamlFile('github: owner'));
+      case '/repos/owner/brain/issues': return Response.json([]);
+      case '/repos/owner/web/issues': return Response.json([{ ...rawIssue, state: 'closed', state_reason: 'completed' }]);
+      default: assert.fail(`Unexpected request: ${url.pathname}`);
+    }
+  });
+  const client = new GitHub('owner/brain', 'replacement-token');
+  const [search, completed] = await Promise.all([client.list('search'), client.list('completed')]);
+  assert.equal(registryReads, 1);
+  assert.deepEqual(search.issues.map(issue => issue.ref), ['site#42']);
+  assert.deepEqual(completed.issues.map(issue => issue.ref), ['site#42']);
+});

@@ -59,10 +59,14 @@ function saveSettings() {
   localStorage.setItem(prefsKey, JSON.stringify(settings));
 }
 
-function resetWorkspace() {
+function clearWorkspaceData() {
   known.clear();
   for (const name of Object.keys(caches)) caches[name] = null;
   owner = '';
+}
+
+function resetWorkspace() {
+  clearWorkspaceData();
   searchQuery = '';
   completedOpen = false;
   filter = new Set();
@@ -143,6 +147,7 @@ function renderSettings(main, id) {
       await next.check();
       if (id !== generation) return;
       if (settings.repo?.toLowerCase() !== next.home.toLowerCase()) resetWorkspace();
+      else clearWorkspaceData();
       settings.repo = next.home;
       settings.token = token.value.trim();
       saveSettings();

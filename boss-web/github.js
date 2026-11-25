@@ -66,10 +66,16 @@ export class GitHub {
   }
 
   async refreshRegistry() {
+    this.registryRequest ??= this.readRegistry().finally(() => { this.registryRequest = null; });
+    return this.registryRequest;
+  }
+
+  async readRegistry() {
     const warnings = [];
     try {
       this.repos = new Map([...taskReposOf(await this.file('repos.yaml'))]
         .filter(([, repo]) => validRepo(repo) && repo.toLowerCase() !== this.home.toLowerCase()));
+      this.registryLoaded = true;
     } catch (error) {
       warnings.push(`repos.yaml: ${error.message}`);
     }
@@ -82,7 +88,8 @@ export class GitHub {
   }
 
   async list(kind, previous = []) {
-    const warnings = kind === 'queue' ? await this.refreshRegistry() : [];
+    const warnings = kind === 'queue' || !this.registryLoaded || this.registryRequest
+      ? await this.refreshRegistry() : [];
     const repos = [['', ''], ...[...this.repos].map(([alias, repo]) => [repo, alias])];
     const path = kind === 'queue' ? 'issues?state=open' :
       `issues?state=${kind === 'completed' ? 'closed' : 'all'}&sort=updated&direction=desc`;
