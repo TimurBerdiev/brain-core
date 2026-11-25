@@ -119,7 +119,9 @@ struct GitHubRepo: TaskSource {
         // Start from GitHub's current body and labels so edits made since the screen loaded are kept,
         // and leave a task someone closed meanwhile closed rather than reopening it.
         let current = try await self.issue(issue.number)
-        if current.state == "closed" && issue.state == "open" && OPEN.contains(status) { return }
+        if current.state == "closed" && issue.state == "open" && OPEN.contains(status) {
+            throw GitHubError(code: 409, message: "#\(issue.number) was closed on GitHub meanwhile, so it stays closed. Refresh to see it.")
+        }
         let change = statusChange(current, status, waitingOn: waitingOn, checkAfter: checkAfter)
         var patch: [String: Any] = ["body": change.body, "labels": change.labels]
         if let s = change.state { patch["state"] = s }
