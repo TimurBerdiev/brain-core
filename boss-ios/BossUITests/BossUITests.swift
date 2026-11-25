@@ -34,6 +34,17 @@ final class BossUITests: XCTestCase {
         XCTAssertTrue(row("timur/site#12").waitForExistence(timeout: 5), "shown with everyone's tasks")
     }
 
+    func testCompletedSectionExpands() {
+        let header = app.buttons["section-Completed"].firstMatch
+        for _ in 0..<6 where !header.isHittable { app.swipeUp() }
+        XCTAssertTrue(header.waitForExistence(timeout: 10))
+        XCTAssertFalse(row("30").exists, "completed tasks start collapsed")
+        header.tap()
+        XCTAssertTrue(row("30").waitForExistence(timeout: 5), "tapping the header reveals completed tasks")
+        header.tap()
+        XCTAssertFalse(row("30").waitForExistence(timeout: 2))
+    }
+
     func testWorkstreamFilter() {
         XCTAssertTrue(row("64").waitForExistence(timeout: 10))
         app.buttons["chip-site"].firstMatch.tap()
