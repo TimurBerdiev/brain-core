@@ -80,6 +80,8 @@ test('assignee and workstream filters are for the queue, not search', () => {
   assert.deepEqual(visibleIssues(issues, cycle(only, 'site'), 'me', true), [home]);
   assert.deepEqual(searchIssues(issues, 'site#7'), [other]);
   assert.deepEqual(searchIssues(issues, 'TEAM/website#7'), [other]);
+  assert.deepEqual(searchIssues(issues, 'TEAM/brain#7', 'team/brain'), [home]);
+  assert.deepEqual(searchIssues(issues, 'team/missing#7', 'team/brain'), []);
 });
 
 test('reads task repo aliases and maps private card images', () => {

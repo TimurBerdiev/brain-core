@@ -71,6 +71,8 @@ test('sample queue, completed, answer, move and search on iPhone', async ({ page
   await expect(page.getByText('Choose the launch checklist')).toBeHidden();
   await expect(page.locator('main')).not.toContainText('null');
   await page.screenshot({ path: `${shots}search.png`, fullPage: true });
+  await search.fill('demo/brain#42');
+  await expect(page.getByText('Choose the launch checklist')).toBeVisible();
   await search.fill('old launch notes');
   await expect(page.getByText('Retire the old launch notes')).toBeVisible();
   expect(external).toEqual([]);

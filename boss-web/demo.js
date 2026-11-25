@@ -16,6 +16,7 @@ const samples = [
 
 export class Demo {
   constructor() {
+    this.home = 'demo/brain';
     this.issues = new Map(samples.map(sample => {
       const issue = issueModel({ updatedAt: '2026-11-25T10:00:00Z', ...sample });
       return [issue.key, issue];

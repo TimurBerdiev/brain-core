@@ -285,7 +285,7 @@ function renderSearch(main, id) {
   function draw() {
     if (id !== generation) return;
     const data = caches.search;
-    const hits = searchIssues(data?.issues ?? [...known.values()], searchQuery);
+    const hits = searchIssues(data?.issues ?? [...known.values()], searchQuery, backend.home);
     results.replaceChildren(warnings(data?.warnings) ?? '', hits.length ? taskList(hits)
       : caption(refresh.disabled ? 'Loading task history…' : 'No matching tasks.'));
   }

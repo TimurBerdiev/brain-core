@@ -130,14 +130,16 @@ export function grouped(issues, me = '') {
     || a.priority - b.priority || a.number - b.number)]);
 }
 
-export function searchIssues(issues, query) {
+export function searchIssues(issues, query, homeRepo = '') {
   const text = query.trim().toLowerCase();
   const qualified = text.match(/^([a-z0-9._-]+(?:\/[a-z0-9._-]+)?)#(\d+)$/);
   const digits = text.match(/^#?(\d+)$/)?.[1];
   const rank = issue => {
     if (!text) return 0;
-    if (qualified) return issue.repo && issue.number === Number(qualified[2])
-      && [issue.taskRepoName, issue.repo].some(s => s.toLowerCase() === qualified[1]) ? 0 : 4;
+    if (qualified) {
+      const names = issue.repo ? [issue.taskRepoName, issue.repo] : [homeRepo];
+      return issue.number === Number(qualified[2]) && names.some(s => s.toLowerCase() === qualified[1]) ? 0 : 4;
+    }
     if (digits && String(issue.number) === digits) return 0;
     if (digits && String(issue.number).includes(digits)) return 1;
     if (!(digits && text.startsWith('#'))) {
