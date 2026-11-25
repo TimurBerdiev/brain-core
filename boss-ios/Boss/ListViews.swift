@@ -6,6 +6,7 @@ struct RootView: View {
         NavigationStack {
             if model.configured { ListScreen() } else { SettingsScreen(firstRun: true) }
         }
+        .id(model.configured)
     }
 }
 
