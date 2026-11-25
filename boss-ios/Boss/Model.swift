@@ -87,7 +87,7 @@ struct Comment: Codable, Hashable, Identifiable {
 }
 
 /// A decision card: the question, the answers to pick from (empty = Yes / No), a recommendation, the rest as markdown.
-struct Card: Equatable {
+struct Card: Hashable {
     var question: String
     var options: [String]
     var recommend: String

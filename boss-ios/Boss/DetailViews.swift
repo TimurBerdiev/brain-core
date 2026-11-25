@@ -21,6 +21,7 @@ struct DetailScreen: View {
                         DecisionCard(card: card, busy: busy,
                                      onAnswer: { choice, note in act("Answer sent") { try await model.answer(issue, card: card, choice: choice, note: note) } },
                                      onAsk: { text in act("Question sent") { try await model.ask(issue, card: card, text: text) } })
+                        .id(card)
                     }
                     if !issue.body.trimmed.isEmpty {
                         Text("Details").font(.headline)
