@@ -95,9 +95,21 @@ struct CollapsibleSection: View {
     @Binding var expanded: Bool
     var body: some View {
         if !issues.isEmpty {
-            Section(isExpanded: $expanded) {
-                ForEach(issues) { TaskRow(issue: $0) }
-            } header: { Text("\(title) · \(issues.count)") }
+            Section {
+                if expanded { ForEach(issues) { TaskRow(issue: $0) } }
+            } header: {
+                Button { withAnimation { expanded.toggle() } } label: {
+                    HStack {
+                        Text("\(title) · \(issues.count)")
+                        Spacer()
+                        Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("section-\(title)")
+                .accessibilityValue(expanded ? "expanded" : "collapsed")
+            }
         }
     }
 }
