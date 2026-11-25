@@ -61,10 +61,14 @@ final class AppModel: ObservableObject {
             .map { GitHubRepo(token: token, repo: $0.value, tag: $0.value, alias: $0.key) }
     }
 
-    func source(for issue: Issue) -> TaskSource { source(repo: issue.repo) }
-    func source(repo tag: String) -> TaskSource {
+    func source(for issue: Issue) throws -> TaskSource { try source(repo: issue.repo) }
+    func source(repo tag: String) throws -> TaskSource {
         let all = sources
-        return tag.isEmpty ? all[0] : all.first { $0.repo == tag } ?? all[0]
+        if tag.isEmpty { return all[0] }
+        guard let src = all.first(where: { $0.repo == tag }) else {
+            throw GitHubError(code: 404, message: "\(tag) is no longer a task repo in repos.yaml")
+        }
+        return src
     }
 
     func save(repo: String, token: String) {
@@ -137,7 +141,7 @@ final class AppModel: ObservableObject {
 
     func load(_ key: String) async throws -> (Issue, [Comment]) {
         let (tag, n) = splitKey(key)
-        let src = source(repo: tag)
+        let src = try source(repo: tag)
         async let i = src.issue(n)
         async let c = src.comments(n)
         var issue = try await i
@@ -146,19 +150,19 @@ final class AppModel: ObservableObject {
     }
 
     func answer(_ issue: Issue, card: Card, choice: String?, note: String) async throws {
-        try await source(for: issue).comment(issue.number, body: answerComment(card.question, choice: choice, note: note))
-        try await source(for: issue).setStatus(issue, "ready", waitingOn: nil, checkAfter: nil)
+        try await (try source(for: issue)).comment(issue.number, body: answerComment(card.question, choice: choice, note: note))
+        try await (try source(for: issue)).setStatus(issue, "ready", waitingOn: nil, checkAfter: nil)
         await refresh()
     }
 
     func ask(_ issue: Issue, card: Card, text: String) async throws {
-        try await source(for: issue).comment(issue.number, body: questionComment(card.question, text))
-        try await source(for: issue).setStatus(issue, "ready", waitingOn: nil, checkAfter: nil)
+        try await (try source(for: issue)).comment(issue.number, body: questionComment(card.question, text))
+        try await (try source(for: issue)).setStatus(issue, "ready", waitingOn: nil, checkAfter: nil)
         await refresh()
     }
 
     func move(_ issue: Issue, to status: String, waitingOn: String?, checkAfter: String?) async throws {
-        try await source(for: issue).setStatus(issue, status, waitingOn: waitingOn, checkAfter: checkAfter)
+        try await (try source(for: issue)).setStatus(issue, status, waitingOn: waitingOn, checkAfter: checkAfter)
         await refresh()
     }
 }
