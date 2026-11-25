@@ -154,6 +154,7 @@ func parseDate(_ iso: String) -> Date? {
 
 func ago(_ iso: String) -> String {
     guard let d = parseDate(iso) else { return iso }
+    if Date().timeIntervalSince(d) < 60 { return "just now" }
     let f = RelativeDateTimeFormatter()
     f.unitsStyle = .short
     return f.localizedString(for: d, relativeTo: Date())
