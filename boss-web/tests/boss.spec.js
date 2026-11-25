@@ -87,3 +87,40 @@ test('Ask instead sends a question and returns the task to Ready', async ({ page
   await page.getByText('Log (2)', { exact: true }).click();
   await expect(page.getByText('Who signs off on the release?', { exact: true })).toBeVisible();
 });
+
+test('collapsed task details and log do not request embedded images', async ({ page }) => {
+  const images = [];
+  await page.route('https://example.com/*.png', async route => {
+    images.push(new URL(route.request().url()).pathname);
+    await route.fulfill({ status: 204 });
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem('boss-web.settings', JSON.stringify({ repo: 'owner/brain', token: 'sample' }));
+    const issue = { number: 42, title: 'Task with images', body: '![Body](https://example.com/body.png)',
+      labels: [{ name: 'backlog' }], state: 'open', updated_at: '2026-11-25T10:00:00Z', html_url: '' };
+    const realFetch = window.fetch;
+    window.fetch = (input, options) => {
+      const url = new URL(input);
+      if (url.origin !== 'https://api.github.com') return realFetch(input, options);
+      const path = url.pathname.replace('/repos/owner/brain/', '');
+      const data = {
+        'contents/repos.yaml': { content: btoa('repos: {}') },
+        'contents/workspace.yaml': { content: btoa('github: owner') },
+        'issues': [issue],
+        'issues/42': issue,
+        'issues/42/comments': [{ body: '![Log](https://example.com/log.png)' }],
+      }[path];
+      return Promise.resolve(new Response(JSON.stringify(data)));
+    };
+  });
+  await page.goto(app);
+  await page.getByRole('button', { name: /Task with images/ }).click();
+  const log = page.getByText('Log (1)', { exact: true });
+  await expect(log).toBeVisible();
+  await expect(page.locator('img')).toHaveCount(0);
+  expect(images).toEqual([]);
+  await log.click();
+  await expect.poll(() => images).toEqual(['/log.png']);
+  await page.getByText('Task details', { exact: true }).click();
+  await expect.poll(() => images).toEqual(['/log.png', '/body.png']);
+});

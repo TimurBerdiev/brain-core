@@ -42,6 +42,17 @@ const panel = (...children) => el('section', { class: 'panel' }, ...children);
 const formField = (text, input) => el('label', { class: 'field' }, el('span', {}, text), input);
 const primary = (text, props = {}) => el('button', { type: 'submit', class: 'primary', ...props }, text);
 
+function collapsed(title, content) {
+  const details = el('details', { class: 'panel' }, el('summary', {}, title));
+  function expand() {
+    if (!details.open || !details.isConnected) return;
+    details.removeEventListener('toggle', expand);
+    details.append(...content().filter(Boolean));
+  }
+  details.addEventListener('toggle', expand);
+  return details;
+}
+
 function saveSettings() {
   settings.filter = [...filter];
   settings.showEveryone = showEveryone;
@@ -314,12 +325,13 @@ async function renderDetail(main, id, next) {
     const meta = el('div', { class: 'chips' }, badge(moveNames[issue.status] ?? 'Input needed', issue.status),
       issue.inProgress ? badge(`In progress · ${issue.claim}`, 'ready') : null,
       issue.tags.map(tag => badge(tag)));
-    const body = el('details', { class: 'panel' }, el('summary', {}, 'Task details'),
+    const body = collapsed('Task details', () => [
       issue.waitingOn ? el('p', {}, `Waiting on: ${issue.waitingOn}`) : null,
       issue.checkAfter ? el('p', {}, `Check after: ${issue.checkAfter}`) : null,
       rich(stripStatusLines(issue.body), id),
-      issue.url ? externalLink(document, 'Open on GitHub', issue.url) : null);
-    const log = el('details', { class: 'panel' }, el('summary', {}, `Log (${comments.length})`),
+      issue.url ? externalLink(document, 'Open on GitHub', issue.url) : null,
+    ]);
+    const log = collapsed(`Log (${comments.length})`, () =>
       comments.map(c => el('article', { class: 'log-entry' }, el('strong', {}, c.author || 'GitHub user'),
         commentKind(c.body) !== 'log' ? badge(commentKind(c.body)) : null, rich(commentText(c.body), id))));
     details.replaceChildren(meta, card ? cardPanel(card) : '', body, loaded ? log : reload);
