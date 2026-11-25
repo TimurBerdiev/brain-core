@@ -81,7 +81,10 @@ struct DetailScreen: View {
     private func act(_ done: String, _ work: @escaping () async throws -> Void) {
         busy = true
         Task {
-            do { try await work(); sent = done; await load() } catch { self.error = describe(error) }
+            var failure: String?
+            do { try await work(); sent = done } catch { failure = describe(error) }
+            await load()
+            if let failure { self.error = failure }
             busy = false
         }
     }
