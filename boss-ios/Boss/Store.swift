@@ -48,7 +48,7 @@ final class AppModel: ObservableObject {
         filter = Set(defaults.stringArray(forKey: "filter") ?? [])
         showEveryone = defaults.bool(forKey: "showEveryone")
         taskRepos = defaults.dictionary(forKey: "taskRepos") as? [String: String] ?? [:]
-        if forceDemo { DemoBackend.shared.reset() }
+        if demo { DemoBackend.shared.reset() }
         if let d = defaults.data(forKey: "issues"), let cached = try? JSONDecoder().decode([Issue].self, from: d), !forceDemo { issues = cached }
     }
 
