@@ -307,6 +307,23 @@ class ScreenshotTest {
 
     @Test fun settings() = shoot("settings") { SettingsScreen(canClose = true, onClose = {}, onSaved = {}) }
 
+    @Test fun githubAppOnboarding() {
+        val app = GitHubAppRegistration("Iv23Example", "boss-example")
+        shoot("github-app-setup") { SettingsScreen(canClose = false, onClose = {}, onSaved = {}, registration = app) }
+        rule.onNodeWithText("Connect with GitHub").assertIsDisplayed()
+        rule.onNodeWithText("Access token").assertDoesNotExist()
+        rule.onNodeWithText("Use a personal access token instead").performScrollTo().performClick()
+        rule.onNodeWithText("Access token").assertIsDisplayed()
+    }
+
+    @Test fun githubDeviceCode() {
+        var opened = false
+        shoot("github-app-code") { GitHubDeviceDialog("ABCD-1234", onCancel = {}, onOpen = { opened = true }) }
+        rule.onNodeWithText("ABCD-1234").assertIsDisplayed()
+        rule.onNodeWithText("Copy code and open GitHub").performClick()
+        assertEquals(true, opened)
+    }
+
     @Test fun askAiPicker() = shoot("ask-ai-picker") {
         AskAiDialog(AiReference.task(issues[0], "alex/brain"), {}, {})
     }

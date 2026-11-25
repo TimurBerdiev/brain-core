@@ -8,6 +8,14 @@ plugins {
 
 // CI sets GITHUB_RUN_NUMBER, so every release build installs over the previous one.
 val build = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
+val githubAppClientId = (providers.gradleProperty("BOSS_GITHUB_APP_CLIENT_ID").orNull
+    ?: System.getenv("BOSS_GITHUB_APP_CLIENT_ID")).orEmpty().trim()
+val githubAppSlug = (providers.gradleProperty("BOSS_GITHUB_APP_SLUG").orNull
+    ?: System.getenv("BOSS_GITHUB_APP_SLUG")).orEmpty().trim()
+require(
+    (githubAppClientId.isEmpty() && githubAppSlug.isEmpty()) ||
+        (githubAppClientId.matches(Regex("[A-Za-z0-9_]+")) && githubAppSlug.matches(Regex("[a-z0-9-]+"))),
+) { "Set both BOSS_GITHUB_APP_CLIENT_ID and BOSS_GITHUB_APP_SLUG to the GitHub App's public settings, or leave both unset." }
 
 android {
     namespace = "dev.braincore.boss"
@@ -18,6 +26,8 @@ android {
         targetSdk = 35
         versionCode = build
         versionName = "0.1.$build"
+        buildConfigField("String", "GITHUB_APP_CLIENT_ID", "\"$githubAppClientId\"")
+        buildConfigField("String", "GITHUB_APP_SLUG", "\"$githubAppSlug\"")
     }
     // Release builds are signed with the key in CI secrets (BOSS_KEYSTORE_* env, see README), so every
     // published APK installs over the last one. Without it (local builds) both types use the debug key.
@@ -40,7 +50,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
     testOptions {
         unitTests.isIncludeAndroidResources = true
         // Robolectric downloads its Android jars at test time; same Maven Central mirror as in settings.gradle.kts.

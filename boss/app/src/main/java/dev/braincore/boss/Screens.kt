@@ -398,6 +398,7 @@ internal fun RepositoryAccessSection(
     canCheck: Boolean,
     onCheck: () -> Unit,
     onManageToken: () -> Unit,
+    usingApp: Boolean = false,
 ) {
     SectionHeader("Task repositories") {
         TextButton(onClick = onCheck, enabled = canCheck && !checking) {
@@ -412,7 +413,7 @@ internal fun RepositoryAccessSection(
                     Text("Checking access…", style = MaterialTheme.typography.bodyMedium)
                 }
                 report == null -> Text(
-                    if (canCheck) "Check the token entered above." else "Enter a workspace repository and token to check access.",
+                    if (canCheck) "Check which repositories Boss can access." else "Enter a workspace repository and connect GitHub to check access.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -441,7 +442,7 @@ internal fun RepositoryAccessSection(
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (!checking && report?.repositories.orEmpty().any { it.issues?.denied == true || it.contents?.denied == true }) {
-                TextButton(onClick = onManageToken) { Text("Manage tokens on GitHub") }
+                TextButton(onClick = onManageToken) { Text(if (usingApp) "Manage GitHub App access" else "Manage tokens on GitHub") }
             }
         }
     }

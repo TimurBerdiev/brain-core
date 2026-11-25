@@ -1,6 +1,9 @@
 package dev.braincore.boss
 
 import android.app.Application
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
@@ -66,11 +69,15 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 
 class App : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
-        GitHub.tokenFor = { Store.token(this) }
+        GitHub.tokenFor = { runBlocking { runCatching { Store.accessToken(this@App) }.getOrDefault("") } }
         Store.schedule(this)
     }
 
@@ -357,34 +364,104 @@ internal fun MoveDialog(issue: Issue, initial: String? = null, onDismiss: () -> 
 
 // ---------------------------------------------------------------- settings
 
+@Composable
+internal fun GitHubDeviceDialog(userCode: String, onCancel: () -> Unit, onOpen: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Authorize Boss on GitHub") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Enter this one-time code on GitHub, then return to Boss.")
+                Text(userCode, style = MaterialTheme.typography.headlineMedium)
+            }
+        },
+        confirmButton = { Button(onClick = onOpen) { Text("Copy code and open GitHub") } },
+        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } },
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun SettingsScreen(canClose: Boolean, onClose: () -> Unit, onSaved: () -> Unit) {
+internal fun SettingsScreen(
+    canClose: Boolean,
+    onClose: () -> Unit,
+    onSaved: () -> Unit,
+    registration: GitHubAppRegistration = GitHubAppRegistration.current,
+) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val uri = LocalUriHandler.current
+    val signIn = remember(registration) { GitHubDeviceAuth(registration) }
     var repo by remember { mutableStateOf(Store.repo(ctx)) }
-    var token by remember { mutableStateOf(Store.token(ctx)) }
+    var token by remember { mutableStateOf(Store.personalToken(ctx)) }
+    var manual by remember { mutableStateOf(!registration.configured) }
+    var operation by remember { mutableStateOf<Job?>(null) }
+    var deviceCode by remember { mutableStateOf<DeviceCode?>(null) }
+    var pendingTokens by remember { mutableStateOf<GitHubAppTokens?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
     val draftRepo = repo.trim()
-    val draftToken = token.trim()
+    val draftToken = if (manual) token.trim() else Store.personalToken(ctx)
+    val savedApp = Store.usesGitHubApp(ctx)
+    val useSavedApp = savedApp && !manual
     val validRepo = Regex("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+").matches(draftRepo)
-    val canCheck = validRepo && draftToken.isNotEmpty()
-    val autoCheck = canClose && draftRepo == Store.repo(ctx) && draftToken == Store.token(ctx)
-    var checkRequest by remember(draftRepo, draftToken) { mutableStateOf(0) }
-    var accessReport by remember(draftRepo, draftToken) { mutableStateOf<RepositoryAccessReport?>(null) }
-    var checking by remember(draftRepo, draftToken) { mutableStateOf(canCheck && autoCheck) }
+    val canCheck = validRepo && (useSavedApp || draftToken.isNotEmpty())
+    val autoCheck = canClose && draftRepo == Store.repo(ctx) && (useSavedApp || draftToken == Store.personalToken(ctx))
+    var checkRequest by remember(draftRepo, draftToken, useSavedApp) { mutableStateOf(0) }
+    var accessReport by remember(draftRepo, draftToken, useSavedApp) { mutableStateOf<RepositoryAccessReport?>(null) }
+    var checking by remember(draftRepo, draftToken, useSavedApp) { mutableStateOf(canCheck && autoCheck) }
     val cachedRepos = if (draftRepo.equals(Store.repo(ctx), ignoreCase = true)) Store.taskRepos(ctx) else emptyList()
     val pendingAccess = listOf(TaskRepo("Workspace", draftRepo)) + cachedRepos
-    LaunchedEffect(draftRepo, draftToken, checkRequest, autoCheck) {
+    fun client(target: String) = if (useSavedApp) Store.client(ctx, target) else GitHub(draftToken, target)
+    LaunchedEffect(draftRepo, draftToken, useSavedApp, checkRequest, autoCheck) {
         if (canCheck && (checkRequest > 0 || autoCheck)) {
             checking = true
-            accessReport = checkRepositoryAccess(GitHub(draftToken, draftRepo), cachedRepos) { GitHub(draftToken, it) }
+            accessReport = checkRepositoryAccess(client(draftRepo), cachedRepos, useSavedApp, ::client)
             checking = false
         } else {
             checking = false
         }
+    }
+    fun perform(action: suspend () -> Unit) {
+        if (operation?.isActive == true) return
+        operation = scope.launch {
+            busy = true
+            error = ""
+            try {
+                action()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = Store.describe(e)
+                if (e is GitHubHttpException && e.code == 401) pendingTokens = null
+            } finally {
+                deviceCode = null
+                busy = false
+            }
+        }
+    }
+    suspend fun finishAppConnection(tokens: GitHubAppTokens?) {
+        val github = if (tokens == null) Store.client(ctx, draftRepo) else GitHub(tokens.access, draftRepo)
+        if (!github.hasAppAccess()) {
+            error = "Install the GitHub App on $draftRepo, or ask the repository owner to grant access."
+            return
+        }
+        github.check()
+        github.checkContents()
+        withContext(Dispatchers.IO) {
+            if (tokens != null) Store.saveGitHubApp(ctx, draftRepo, tokens) else Store.saveAppRepository(ctx, draftRepo)
+        }
+        pendingTokens = null
+        onSaved()
+    }
+    fun openGitHub(url: String) {
+        if (runCatching { uri.openUri(url) }.isFailure) error = "Couldn't open GitHub. Check that a browser is installed."
+    }
+    deviceCode?.let { code ->
+        GitHubDeviceDialog(code.userCode, onCancel = { operation?.cancel() }, onOpen = {
+            ctx.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("GitHub sign-in code", code.userCode))
+            openGitHub(GitHubDeviceAuth.VERIFICATION_URL)
+        })
     }
     if (canClose) BackHandler { onClose() }
     Scaffold(
@@ -416,36 +493,70 @@ internal fun SettingsScreen(canClose: Boolean, onClose: () -> Unit, onSaved: () 
                         enabled = !busy,
                         singleLine = true, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth(),
                     )
-                    OutlinedTextField(
-                        token, { token = it }, label = { Text("Access token") }, singleLine = true, shape = MaterialTheme.shapes.small,
-                        enabled = !busy,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth(),
-                        supportingText = { Text("Include the workspace and its task repositories in the same token. Give it Issues: read and write, and Contents: read. Saving the agent filter also needs Contents: write.") },
-                    )
-                    if (error.isNotEmpty()) ErrorBanner(errorText(error, 0))
-                    Button(
-                        enabled = !busy && canCheck,
-                        shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().height(48.dp),
-                        onClick = {
-                            scope.launch {
-                                busy = true
-                                error = runCatching { GitHub(token.trim(), repo.trim()).check() }.exceptionOrNull()?.let(Store::describe).orEmpty()
-                                if (error.isEmpty()) {
-                                    Store.save(ctx, repo, token)
-                                    runCatching { Store.sync(ctx) }
-                                    onSaved()
+                    if (registration.configured && !manual) {
+                        if (savedApp) Text("Connected through a GitHub App", style = MaterialTheme.typography.bodyMedium)
+                        else if (draftToken.isNotEmpty()) Text("Connected with a personal access token", style = MaterialTheme.typography.bodyMedium)
+                        if (pendingTokens != null) Text("GitHub sign-in approved. Finish granting repository access to connect.")
+                        Button(
+                            enabled = !busy && validRepo, shape = MaterialTheme.shapes.small,
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            onClick = {
+                                perform {
+                                    val tokens = pendingTokens ?: if (useSavedApp && draftRepo != Store.repo(ctx)) null else {
+                                        val code = signIn.start()
+                                        deviceCode = code
+                                        signIn.authorize(code).also {
+                                            deviceCode = null
+                                            pendingTokens = it
+                                        }
+                                    }
+                                    finishAppConnection(tokens)
                                 }
-                                busy = false
-                            }
-                        },
-                    ) {
-                        if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
-                        else Text(if (canClose) "Save" else "Connect")
+                            },
+                        ) {
+                            Text(when {
+                                pendingTokens != null -> "Check installation and connect"
+                                savedApp && draftRepo != Store.repo(ctx) -> "Save repository"
+                                savedApp -> "Reconnect with GitHub"
+                                else -> "Connect with GitHub"
+                            })
+                        }
+                        TextButton(enabled = !busy, onClick = { openGitHub(registration.installUrl) }) {
+                            Text(if (savedApp) "Manage GitHub App access" else "Install GitHub App on your repositories")
+                        }
+                    }
+                    if (manual) {
+                        OutlinedTextField(
+                            token, { token = it }, label = { Text("Access token") }, singleLine = true, shape = MaterialTheme.shapes.small,
+                            enabled = !busy,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth(),
+                            supportingText = { Text("Include your workspace and task repositories. Use Issues: read and write, and Contents: read. Saving the agent filter also needs Contents: write.") },
+                        )
+                        Button(
+                            enabled = !busy && canCheck, shape = MaterialTheme.shapes.small,
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            onClick = { perform {
+                                client(draftRepo).check()
+                                Store.save(ctx, draftRepo, draftToken)
+                                onSaved()
+                            } },
+                        ) { Text(if (canClose) "Save token" else "Connect with token") }
+                    }
+                    if (busy && deviceCode == null) {
+                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    }
+                    if (error.isNotEmpty()) ErrorBanner(errorText(error, 0))
+                    if (registration.configured) {
+                        TextButton(enabled = !busy, onClick = {
+                            manual = !manual
+                            pendingTokens = null
+                            error = ""
+                        }) { Text(if (manual) "Use GitHub App instead" else "Use a personal access token instead") }
                     }
                 }
             }
-            LinkRow("Create a token on GitHub") { uri.openUri("https://github.com/settings/personal-access-tokens/new") }
+            if (manual) LinkRow("Create a token on GitHub") { openGitHub("https://github.com/settings/personal-access-tokens/new") }
 
             RepositoryAccessSection(
                 report = accessReport,
@@ -453,7 +564,8 @@ internal fun SettingsScreen(canClose: Boolean, onClose: () -> Unit, onSaved: () 
                 checking = checking,
                 canCheck = canCheck && !busy,
                 onCheck = { checkRequest++ },
-                onManageToken = { uri.openUri("https://github.com/settings/personal-access-tokens") },
+                onManageToken = { openGitHub(if (useSavedApp) registration.installUrl else "https://github.com/settings/personal-access-tokens") },
+                usingApp = useSavedApp,
             )
 
             var filter by remember { mutableStateOf(Store.filter(ctx)) }

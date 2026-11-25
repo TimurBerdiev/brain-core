@@ -1,6 +1,6 @@
 # Boss
 
-Android app and home-screen widget for your Brain's task queue: GitHub issues with status labels in your Brain repo and its task repos ([MANUAL.md](../MANUAL.md), "Tasks"). Answer decision cards, change statuses and watch your agents from the phone. No server: the app talks to the GitHub REST API with your own token.
+Android app and home-screen widget for your Brain's task queue: GitHub issues with status labels in your Brain repo and its task repos ([MANUAL.md](../MANUAL.md), "Tasks"). Answer decision cards, change statuses and watch your agents from the phone. No server: Boss connects directly to GitHub through a GitHub App.
 
 - **Tabs:** Tasks keeps the queue and decision cards; Activity shows recent changes; Runs lists agent runs like CI builds; Usage shows agent subscription limits.
 - **Ask AI:** Tasks, task details, Activity and Usage offer Claude / ChatGPT. The chooser previews a short
@@ -11,7 +11,7 @@ Android app and home-screen widget for your Brain's task queue: GitHub issues wi
 - **Activity:** rolling Last hour / 24 hours / 3 days views combine default-branch commits, task and pull-request events,
   comments, and agent-claim pushes. Every row names its repository and links to GitHub. Author/coauthor names are shown
   only when supplied by GitHub; an account name alone does not prove which engine did the work.
-  Edit the watched repositories in Activity (candidates come from `repos.yaml`; the token must cover each selected repo).
+  Edit the watched repositories in Activity (candidates come from `repos.yaml`; grant the app access to each selected repo).
   The default is home plus task repos. Activity has its own saved cache; unavailable repos keep their saved entries with a warning.
   GitHub task events may be delayed and are capped at 300 per repo; commit loading is capped at 1,000 in three days.
 - **Runs:** agent runs (a nightly release, a test run, ...) newest first, from `runs/index.json` on the `runs` branch
@@ -33,7 +33,7 @@ Android app and home-screen widget for your Brain's task queue: GitHub issues wi
   Tasks outside home use the name from `repos.yaml` in references such as `site#38` and in workstream filters. If a task repo
   is unavailable, Boss keeps its saved tasks and names the repo in the sync details. The home repo must answer to refresh the queue.
 - **Check access:** Settings → Task repositories shows whether Boss can read issues and contents for each
-  repository. It checks automatically on open and can check a token before you save it. If the registry
+  repository. It checks automatically on open and can check a personal token before you save it. If the registry
   can't be read, the screen marks the previously known list as cached. The check makes no writes.
 
 - **Statuses** are labels: `backlog`, `ready` (agents), `input-needed` (someone has to answer: the assignee, else the owner;
@@ -62,7 +62,7 @@ Android app and home-screen widget for your Brain's task queue: GitHub issues wi
 - **Agents pick** (Settings): the same chips decide which ready tasks the agents take (`task.sh next`/`take`
   apply it, so Autopilot and any dispatcher follow it).
   It is the `filter:` line in the Brain's `workers.yaml` (same format: `name` / `-name`); Save commits it,
-  so the token needs Contents: read and write for this one. If the file changed meanwhile, the app reloads
+  so GitHub access needs Contents: read and write for this one. If the file changed meanwhile, the app reloads
   it and keeps your edit to save again.
   Tap a task to open it or ↻ to request a refresh. Android runs the refresh as background work and schedules
   automatic refreshes about every 15 minutes. Temporary failures get up to three attempts for a manual refresh,
@@ -79,13 +79,33 @@ Android app and home-screen widget for your Brain's task queue: GitHub issues wi
 
 ## Install
 
-1. Open <https://github.com/rawmahn/brain-core/releases/latest> on the phone, download `boss.apk`, allow installs
-   from the browser, install. Every change to `boss/` on Brain Core's `main` makes a new release; install it over the old one.
-2. Make a fine-grained token at <https://github.com/settings/personal-access-tokens/new>: repository access to your
-   Brain repo and every task repo; permissions Issues read and write, Contents read and write (card images on the
-   `cards` branch of each task repo, runs, usage; writing is only for the Agents pick filter, read-only works for
-   everything else). In the app, enter the Brain repo (`owner/name`) and paste the token.
+1. Open the releases page for the Brain Core repository publishing your build, download `boss.apk` on the phone,
+   and install it. Install new releases over the old one.
+2. In Boss, enter your Brain repository (`owner/name`) and tap **Connect with GitHub**. Copy the one-time code
+   using the button in Boss, paste it on GitHub, approve access, and return to Boss. If your repo isn't granted yet,
+   tap **Install GitHub App on your repositories**, select the Brain repo and its task repos on GitHub, then return
+   and tap **Check installation and connect**. An organization may require an owner to approve the installation.
 3. Long-press the home screen → Widgets → Boss.
+
+Boss stores GitHub App credentials in Android Keystore-encrypted storage and refreshes them for the app and widget.
+If access is revoked, reconnect in Settings. You can revoke Boss under [Authorized GitHub Apps](https://github.com/settings/apps/authorizations).
+Existing personal access tokens keep working until you switch. Builds without a registered App can still use a
+[fine-grained token](https://github.com/settings/personal-access-tokens/new) with the same repository access.
+
+### Register the GitHub App for a Boss release
+
+1. [Create a GitHub App](https://github.com/settings/apps/new). Use the Brain Core repository URL as its homepage.
+   Enable **Device Flow**. Leave **Request user authorization (OAuth) during installation** unchecked and disable
+   webhooks; no callback URL, webhook server, client secret or private key is needed for Boss. Keep user-to-server
+   token expiration enabled. Choose **Any account** if users need to install it outside the owner's account.
+2. Set repository permissions: **Issues: Read and write**, **Contents: Read and write** (write is only needed
+   for the Agents pick filter), and the default **Metadata: Read-only**. Install on selected repositories, not all
+   repositories, unless you intend to grant all. Include the workspace and every task or watched repository you use.
+3. Under the publishing repository's **Settings → Secrets and variables → Actions → Variables**, set
+   `BOSS_GITHUB_APP_CLIENT_ID` to the App's **Client ID** (not its numeric App ID) and
+   `BOSS_GITHUB_APP_SLUG` to the name in its public link (`github.com/apps/<slug>`). Both values are public.
+   The release workflow embeds them in the APK and refuses to publish a signed release without them. For a local
+   build, pass them as environment variables or Gradle `-P` properties with the same names.
 
 ## Formats the app reads
 

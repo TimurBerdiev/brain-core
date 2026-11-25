@@ -47,7 +47,14 @@ jobs:
       - name: Test and build
         env:
           BOSS_KEYSTORE_PASSWORD: ${{ secrets.BOSS_KEYSTORE_PASSWORD }}
-        run: ./gradlew --no-daemon testDebugUnitTest assembleRelease
+          BOSS_GITHUB_APP_CLIENT_ID: ${{ vars.BOSS_GITHUB_APP_CLIENT_ID }}
+          BOSS_GITHUB_APP_SLUG: ${{ vars.BOSS_GITHUB_APP_SLUG }}
+        run: |
+          if [[ -n "$BOSS_KEYSTORE_FILE" && ( -z "$BOSS_GITHUB_APP_CLIENT_ID" || -z "$BOSS_GITHUB_APP_SLUG" ) ]]; then
+            echo "::error::Set BOSS_GITHUB_APP_CLIENT_ID and BOSS_GITHUB_APP_SLUG before publishing Boss."
+            exit 1
+          fi
+          ./gradlew --no-daemon testDebugUnitTest assembleRelease
       - name: Keep the screenshots
         uses: actions/upload-artifact@v4
         with:
