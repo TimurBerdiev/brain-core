@@ -1,0 +1,62 @@
+name: Boss web
+
+on:
+  pull_request:
+    paths: ['boss-web/**', 'tests/fixtures/**', '.github/workflows/boss-web.yml']
+  push:
+    branches: [main]
+    paths: ['boss-web/**', 'tests/fixtures/**', '.github/workflows/boss-web.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: boss-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: boss-web/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npx playwright install --with-deps webkit
+      - run: npm run test:ui
+      - uses: actions/upload-artifact@v4
+        with:
+          name: boss-iphone-screenshots
+          path: boss-web/screenshots/
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: boss-pages
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Stage the public app shell
+        run: |
+          mkdir _site
+          cp boss-web/*.html boss-web/{app,demo,github,markdown,model,sw}.js boss-web/*.css boss-web/icon* boss-web/*.webmanifest _site/
+          mkdir _site/vendor
+          cp boss-web/vendor/{js-yaml.mjs,LICENSE} _site/vendor/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: pages
+        uses: actions/deploy-pages@v4

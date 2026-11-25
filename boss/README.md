@@ -135,10 +135,9 @@ Provider keys: `antigravity`, `claude-code`, `codex`. `auth_state` `not_authenti
   device). Look at them for any UI change and add a case for a new screen. CI uploads them as the `screens` artifact.
 - Dependencies come through Google's mirror of Maven Central first (`settings.gradle.kts`): Maven Central
   rate-limits shared cloud IPs with 429s.
-- **The app mirrors `scripts/task.py`** (`Model.kt`: statuses, the card format, markers, task repos, the workstream
-  filter's `matches`). Change both in the same commit. The cases in [`tests/fixtures/`](../tests/fixtures) (cards,
-  statuses and `Waiting on:` lines, status changes, claims) are read by both `scripts/test_fixtures.py` and
-  `FixturesTest.kt`, so a format change made on one side only fails a test; add a case there for a new rule.
+- **The apps mirror `scripts/task.py`** (`Model.kt` and `boss-web/model.js`: statuses, the card format, markers, task
+  repos, the workstream filter's `matches`). Change the implementations in the same commit. The cases in
+  [`tests/fixtures/`](../tests/fixtures) are run by Python, Android, and Boss web; add a case there for a new rule.
 - **Signing:** [`.github/workflows/boss.yml`](../.github/workflows/boss.yml) signs release APKs with the key in the repo
   secrets `BOSS_KEYSTORE_B64` (base64 of the keystore, alias `boss`) and `BOSS_KEYSTORE_PASSWORD`, so each release
   installs over the last. Without them (a fork, a PR, a local build) the APK is debug-signed and nothing is published.
