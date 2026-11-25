@@ -279,6 +279,7 @@ object Store {
 
     /** Re-read repos.yaml; on failure keep the last list, so a hiccup never hides a repo's tasks. */
     private suspend fun refreshTaskRepos(ctx: Context) {
+        val config = configKey(ctx)
         val repos = try {
             readTaskRepoRegistry(github(ctx))
         } catch (e: CancellationException) {
@@ -286,9 +287,12 @@ object Store {
         } catch (_: Exception) {
             return
         }
+        if (config != configKey(ctx)) throw CancellationException("Workspace changed")
         prefs(ctx).edit().putString("task_repos", JSONObject(repos).toString()).apply()
         try {
-            prefs(ctx).edit().putString("owner", ownerOf(github(ctx).file("workspace.yaml").text)).apply()
+            val owner = ownerOf(github(ctx).file("workspace.yaml").text)
+            if (config != configKey(ctx)) throw CancellationException("Workspace changed")
+            prefs(ctx).edit().putString("owner", owner).apply()
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -425,8 +429,10 @@ object Store {
         ctx: Context, fetch: suspend () -> List<Issue>, redraw: suspend () -> Unit,
         failures: () -> Map<String, Exception> = { emptyMap() },
     ): List<Issue> = syncMutex.withLock {
+        val config = configKey(ctx)
         try {
             val issues = fetch()
+            if (config != configKey(ctx)) throw CancellationException("Workspace changed")
             val missed = failures()
             prefs(ctx).edit()
                 .putString("snapshot", JSONArray(issues.map(GitHub::toJson)).toString())
@@ -444,6 +450,7 @@ object Store {
             // WorkManager can stop work when constraints change. That is not a failed network request.
             throw e
         } catch (e: Exception) {
+            if (config != configKey(ctx)) throw CancellationException("Workspace changed")
             prefs(ctx).edit().putString("error", describe(e)).putString("sync_problem", classifySyncError(e).name).apply()
             throw e
         } finally {

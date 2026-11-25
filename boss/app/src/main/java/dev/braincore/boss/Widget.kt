@@ -45,6 +45,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 
 val IssueKey = ActionParameters.Key<String>(MainActivity.EXTRA_ISSUE)
+private val WorkspaceKey = ActionParameters.Key<String>(MainActivity.EXTRA_WORKSPACE)
 
 class BossWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget = BossWidget()
@@ -70,6 +71,7 @@ internal data class WidgetState(
     val problem: SyncProblem?,
     val refreshing: Boolean,
     val filter: Set<String>,
+    val workspace: String = "",
 ) {
     companion object {
         fun load(ctx: Context): WidgetState {
@@ -81,6 +83,7 @@ internal data class WidgetState(
                 problem = Store.syncProblem(ctx),
                 refreshing = Store.refreshing(ctx),
                 filter = filter,
+                workspace = Store.repo(ctx),
             )
         }
     }
@@ -149,7 +152,7 @@ class BossWidget : GlanceAppWidget() {
                 mine.isEmpty() && state.problem != null -> Message(R.drawable.ic_refresh, "Saved queue", "Some tasks may be out of date")
                 mine.isEmpty() -> Message(R.drawable.ic_check, "All caught up", "Nothing waits on you")
                 else -> LazyColumn(GlanceModifier.defaultWeight().padding(end = 6.dp)) {
-                    items(mine, itemId = { it.key.hashCode().toLong() }) { issue -> DecisionItem(issue) }
+                    items(mine, itemId = { it.key.hashCode().toLong() }) { issue -> DecisionItem(issue, state.workspace) }
                 }
             }
             if (state.configured) {
@@ -191,12 +194,12 @@ class BossWidget : GlanceAppWidget() {
 
 /** One decision on the widget: an amber dot, the question, the task under it. Tap opens its card. */
 @Composable
-internal fun DecisionItem(issue: Issue) {
+internal fun DecisionItem(issue: Issue, workspace: String = "") {
     val c = GlanceTheme.colors
     Column(GlanceModifier.fillMaxWidth().padding(bottom = 6.dp)) {
         Row(
             GlanceModifier.fillMaxWidth().background(c.surface).cornerRadius(14.dp).padding(horizontal = 12.dp, vertical = 9.dp)
-                .clickable(actionStartActivity<MainActivity>(actionParametersOf(IssueKey to issue.key))),
+                .clickable(actionStartActivity<MainActivity>(actionParametersOf(IssueKey to issue.key, WorkspaceKey to workspace))),
         ) {
             Column(GlanceModifier.padding(top = 6.dp)) {
                 Image(ImageProvider(R.drawable.ic_dot), null, colorFilter = ColorFilter.tint(c.tertiary), modifier = GlanceModifier.size(8.dp))

@@ -105,11 +105,13 @@ class MainActivity : ComponentActivity() {
 
     /** A task key ([Issue.key]); widgets placed by older versions still send the bare issue number. */
     private fun issueFrom(intent: Intent?): String? = intent?.let {
+        if (it.getStringExtra(EXTRA_WORKSPACE)?.equals(Store.repo(this), ignoreCase = true) == false) return null
         it.getStringExtra(EXTRA_ISSUE) ?: it.getIntExtra(EXTRA_ISSUE, 0).takeIf { n -> n > 0 }?.toString()
     }
 
     companion object {
         const val EXTRA_ISSUE = "issue"
+        const val EXTRA_WORKSPACE = "workspace"
     }
 }
 
@@ -440,6 +442,16 @@ internal fun SettingsScreen(
             }
         }
     }
+    suspend fun finishSettings() {
+        try {
+            Store.refresh(ctx)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // The connection was already saved; scheduling a widget refresh must not undo it.
+        }
+        onSaved()
+    }
     suspend fun finishAppConnection(tokens: GitHubAppTokens?) {
         val github = if (tokens == null) Store.client(ctx, draftRepo) else GitHub(tokens.access, draftRepo)
         if (!github.hasAppAccess()) {
@@ -452,7 +464,7 @@ internal fun SettingsScreen(
             if (tokens != null) Store.saveGitHubApp(ctx, draftRepo, tokens) else Store.saveAppRepository(ctx, draftRepo)
         }
         pendingTokens = null
-        onSaved()
+        finishSettings()
     }
     fun openGitHub(url: String) {
         if (runCatching { uri.openUri(url) }.isFailure) error = "Couldn't open GitHub. Check that a browser is installed."
@@ -539,7 +551,7 @@ internal fun SettingsScreen(
                             onClick = { perform {
                                 client(draftRepo).check()
                                 Store.save(ctx, draftRepo, draftToken)
-                                onSaved()
+                                finishSettings()
                             } },
                         ) { Text(if (canClose) "Save token" else "Connect with token") }
                     }
