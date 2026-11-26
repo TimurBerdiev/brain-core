@@ -92,6 +92,37 @@ test('Ask instead sends a question and returns the task to Ready', async ({ page
   await expect(page.getByText('Who signs off on the release?', { exact: true })).toBeVisible();
 });
 
+test('a claimed Ready task shows the worker on the queue and on detail', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('boss-web.settings', JSON.stringify({ repo: 'owner/brain', token: 'sample' }));
+    const issue = { number: 42, title: 'Resume Boss work', body: '', labels: [{ name: 'ready' }],
+      state: 'open', updated_at: new Date().toISOString(), html_url: '' };
+    const responses = {
+      'contents/repos.yaml': { content: btoa('repos: {}') },
+      'contents/workspace.yaml': { content: btoa('github: owner') },
+      issues: [issue],
+      'issues/42': issue,
+      'issues/42/comments': [],
+      'git/matching-refs/heads/claim': [{ ref: 'refs/heads/claim/42', object: { sha: 'tip' } }],
+      'git/commits/tip': { message: 'claim #42 by dogfood-worker', committer: { date: new Date().toISOString() } },
+    };
+    const realFetch = window.fetch;
+    window.fetch = (input, options) => {
+      const url = new URL(input);
+      if (url.origin !== 'https://api.github.com') return realFetch(input, options);
+      const path = url.pathname.replace('/repos/owner/brain/', '');
+      return Promise.resolve(Response.json(responses[path]));
+    };
+  });
+  const claim = 'In progress · dogfood-worker';
+  await page.goto(app);
+  const task = page.getByRole('button', { name: /Resume Boss work/ });
+  await expect(task).toContainText(claim);
+  await task.click();
+  await expect(page.getByRole('heading', { name: 'Resume Boss work' })).toBeVisible();
+  await expect(page.getByText(claim, { exact: true })).toBeVisible();
+});
+
 test('collapsed task details and log do not request embedded images', async ({ page }) => {
   const images = [];
   await page.route('https://example.com/*.png', async route => {

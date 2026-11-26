@@ -160,7 +160,9 @@ export class GitHub {
 
   async detail(issue) {
     const [fresh, comments] = await Promise.all([this.fresh(issue), this.pages(issue.repo, `issues/${issue.number}/comments`)]);
-    return { issue: fresh, comments: comments.map(c => ({ body: c.body ?? '', author: c.user?.login ?? '', url: c.html_url })) };
+    const claims = await this.claims(fresh.repo, [fresh]).catch(() => new Map());
+    return { issue: issueModel({ ...fresh, claim: claims.get(fresh.number) ?? '' }),
+      comments: comments.map(c => ({ body: c.body ?? '', author: c.user?.login ?? '', url: c.html_url })) };
   }
 
   async fresh(issue) {

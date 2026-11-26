@@ -66,6 +66,8 @@ test('Boss dogfood seeds once, answers the top card and resumes via a real task.
   assert.match(pickup.next, /Run one scoped pickup/);
   assert.equal((await client.list('queue')).issues.find(i => i.key === issue.key).claim, pickup.worker);
   const after = await client.detail(issue);
+  assert.equal(after.issue.claim, pickup.worker);
+  assert.equal(after.issue.inProgress, true);
   assert.match(after.comments.at(-1).body, /Resumed.*after reading:[\s\S]*Run on demand[\s\S]*Verify one pickup/);
 });
 
