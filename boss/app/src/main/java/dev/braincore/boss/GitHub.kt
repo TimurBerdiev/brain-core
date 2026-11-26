@@ -19,7 +19,7 @@ internal class GitHubHttpException(val code: Int, message: String, val rateLimit
 data class RepoFile(val text: String, val sha: String)
 
 /**
- * GitHub REST for one repo, with a fine-grained token (Issues: read/write; Contents: read, write for the dispatcher filter).
+ * GitHub REST for one repo, authenticated by a GitHub App or a fine-grained personal token.
  * [tag] is what its issues carry as [Issue.repo]: empty for the home repo, owner/name for another task repo.
  * [repoAlias] is the name used in task references and workstream filters.
  */
@@ -29,13 +29,14 @@ class GitHub(
     private val tag: String = "",
     private val repoAlias: String = "",
     private val client: OkHttpClient = http,
+    private val tokenProvider: (suspend () -> String)? = null,
 ) {
     private fun tagged(i: Issue) = i.copy(repo = tag, repoAlias = repoAlias)
 
     private suspend fun call(method: String, path: String, body: JSONObject? = null): String = withContext(Dispatchers.IO) {
         val req = Request.Builder()
             .url(if (path.startsWith("https://")) path else "https://api.github.com/repos/$repo/$path")
-            .header("Authorization", "Bearer $token")
+            .header("Authorization", "Bearer ${tokenProvider?.invoke() ?: token}")
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
             .method(method, body?.toString()?.toRequestBody("application/json".toMediaType()))
@@ -66,6 +67,28 @@ class GitHub(
     }
 
     suspend fun check() { call("GET", "issues?per_page=1") }
+
+    /** Check the grant itself: read endpoints alone don't prove an App was installed on a public repo. */
+    internal suspend fun hasAppAccess(): Boolean {
+        val account = repo.substringBefore('/')
+        val api = "https://api.github.com/user/installations"
+        return anyOnPages(api, "installations") { installation ->
+            account.equals(installation.optJSONObject("account")?.optString("login"), ignoreCase = true) &&
+                anyOnPages("$api/${installation.getLong("id")}/repositories", "repositories") {
+                    repo.equals(it.optString("full_name"), ignoreCase = true)
+                }
+        }
+    }
+
+    private suspend fun anyOnPages(url: String, key: String, match: suspend (JSONObject) -> Boolean): Boolean {
+        var page = 1
+        while (true) {
+            val entries = JSONObject(call("GET", "$url?per_page=100&page=$page")).getJSONArray(key).objects()
+            for (entry in entries) if (match(entry)) return true
+            if (entries.size < 100) return false
+            page++
+        }
+    }
 
     /** A read check that also works when the repository has no claim or card branches yet. */
     internal suspend fun checkContents() { call("GET", "branches?per_page=1") }
@@ -178,9 +201,9 @@ class GitHub(
                     apiImageUrl(url)?.let { api ->
                         req = req.newBuilder().url(api).header("Accept", "application/vnd.github.raw").build()
                     }
-                    val token = tokenFor()
-                    if (req.header("Authorization") == null && token.isNotEmpty() && req.url.host == "api.github.com") {
-                        req = req.newBuilder().header("Authorization", "Bearer $token").build()
+                    if (req.header("Authorization") == null && req.url.host == "api.github.com") {
+                        val token = tokenFor()
+                        if (token.isNotEmpty()) req = req.newBuilder().header("Authorization", "Bearer $token").build()
                     }
                     chain.proceed(req)
                 })

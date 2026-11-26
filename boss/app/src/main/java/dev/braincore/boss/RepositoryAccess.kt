@@ -25,6 +25,7 @@ internal suspend fun readTaskRepoRegistry(home: GitHub): Map<String, String> =
 internal suspend fun checkRepositoryAccess(
     home: GitHub,
     cachedRepos: List<TaskRepo>,
+    usingApp: Boolean = false,
     connect: (String) -> GitHub,
 ): RepositoryAccessReport {
     var registryProblem: String? = null
@@ -50,7 +51,11 @@ internal suspend fun checkRepositoryAccess(
             .distinctBy { it.fullName.lowercase() }
             .map { repo ->
                 val github = if (repo.fullName == home.repo) home else connect(repo.fullName)
-                RepositoryAccess(repo, probeRead { github.check() }, probeRead { github.checkContents() })
+                val appAccess = if (usingApp) probeRead {
+                    if (!github.hasAppAccess()) throw GitHubAuthException("The GitHub App is not installed on this repository.")
+                } else null
+                if (appAccess?.problem != null) RepositoryAccess(repo, appAccess, appAccess)
+                else RepositoryAccess(repo, probeRead { github.check() }, probeRead { github.checkContents() })
             },
         registryProblem,
     )
@@ -62,11 +67,12 @@ private suspend fun probeRead(check: suspend () -> Unit): ReadAccess = try {
 } catch (e: CancellationException) {
     throw e
 } catch (e: Exception) {
-    val denied = e is GitHubHttpException && !e.rateLimited && e.code in listOf(401, 403, 404, 410)
+    val denied = e is GitHubAuthException || (e is GitHubHttpException && !e.rateLimited && e.code in listOf(401, 403, 404, 410))
     ReadAccess(accessProblem(e), denied)
 }
 
 private fun accessProblem(e: Exception): String = when {
+    e is GitHubAuthException -> e.message.orEmpty()
     e is GitHubHttpException && e.rateLimited -> "GitHub rate limit reached. Try again later."
     e is GitHubHttpException -> when (e.code) {
         401 -> "GitHub rejected the token (401). Check whether it expired or was revoked."

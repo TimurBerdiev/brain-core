@@ -89,6 +89,18 @@ class StoreTest {
         assertEquals(0L, Store.activitySynced(ctx))
     }
 
+    @Test fun oldQueueCannotRepopulateWidgetAfterWorkspaceChanges() = runBlocking {
+        val result = runCatching {
+            Store.sync(ctx, fetch = {
+                Store.save(ctx, "other/home", "new-token")
+                listOf(issue)
+            }, redraw = {})
+        }
+        assertTrue(result.exceptionOrNull() is CancellationException)
+        assertTrue(Store.issues(ctx).isEmpty())
+        assertEquals(0L, Store.syncedAt(ctx))
+    }
+
     @Test fun taskRepositoryCacheSupportsOldAndNewValues() {
         val prefs = ctx.getSharedPreferences("boss", Context.MODE_PRIVATE)
         prefs.edit().putString("task_repos", "alex/studio,another/studio").commit()

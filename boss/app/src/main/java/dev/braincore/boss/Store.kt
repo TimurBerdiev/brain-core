@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -29,11 +30,13 @@ import java.io.IOException
 import java.net.ConnectException
 import java.net.NoRouteToHostException
 import java.net.UnknownHostException
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 internal enum class SyncProblem { ACCESS, TEMPORARY, OTHER }
 
 internal fun classifySyncError(error: Throwable): SyncProblem = when (error) {
+    is GitHubAuthException -> if (error.reconnect) SyncProblem.ACCESS else SyncProblem.OTHER
     is GitHubHttpException -> when {
         error.rateLimited || error.code in 500..599 || error.code in listOf(408, 429) -> SyncProblem.TEMPORARY
         error.code in listOf(401, 403, 404, 410) -> SyncProblem.ACCESS
@@ -60,6 +63,8 @@ object Store {
     private val syncMutex = Mutex()
     private val completedMutex = Mutex()
     private val searchMutex = Mutex()
+    private var appVault: GitHubAppCredentialVault? = null
+    private var appTokens: GitHubAppTokenProvider? = null
 
     /**
      * Bumped whenever something the widget shows changes. A running Glance session doesn't call provideGlance
@@ -68,15 +73,74 @@ object Store {
     val changes: StateFlow<Long> = _changes
     private fun changed() = _changes.update { it + 1 }
 
-    fun token(ctx: Context): String = prefs(ctx).getString("token", "").orEmpty()
+    internal fun personalToken(ctx: Context): String = prefs(ctx).getString("token", "").orEmpty()
+    private fun appId(ctx: Context): String? = prefs(ctx).getString("github_app_connection", null)
+    internal fun usesGitHubApp(ctx: Context) = appId(ctx) != null
+    private fun configKey(ctx: Context) = repo(ctx) to (appId(ctx) ?: personalToken(ctx))
+
+    @Synchronized
+    private fun vault(ctx: Context) =
+        appVault ?: GitHubAppCredentialVault(ctx.applicationContext).also { appVault = it }
+
+    @Synchronized
+    private fun provider(ctx: Context): GitHubAppTokenProvider {
+        val app = ctx.applicationContext
+        return appTokens ?: GitHubAppTokenProvider(
+            read = { id ->
+                if (appId(app) != id) null else try {
+                    vault(app).read(id)
+                } catch (_: Exception) {
+                    throw GitHubAuthException("GitHub credentials couldn't be opened. Reconnect in Settings.", reconnect = true)
+                }
+            },
+            replace = { id, tokens -> replaceAppTokens(app, id, tokens) },
+            refresh = GitHubDeviceAuth(GitHubAppRegistration.current)::refresh,
+        ).also { appTokens = it }
+    }
+
+    @Synchronized
+    private fun replaceAppTokens(ctx: Context, id: String, tokens: GitHubAppTokens): Boolean {
+        if (appId(ctx) != id) return false
+        writeAppTokens(ctx, id, tokens)
+        return true
+    }
+
+    private fun writeAppTokens(ctx: Context, id: String, tokens: GitHubAppTokens) {
+        try {
+            vault(ctx).write(id, tokens)
+        } catch (_: Exception) {
+            throw GitHubAuthException("Boss couldn't save GitHub credentials on this device. Try connecting again.")
+        }
+    }
+
+    internal suspend fun accessToken(ctx: Context): String =
+        appId(ctx)?.let { id -> withContext(Dispatchers.IO) { provider(ctx).access(id) } } ?: personalToken(ctx)
+
     /** The owner's Brain (workspace) repo, "owner/name"; empty until Settings saves one. */
     fun repo(ctx: Context): String = prefs(ctx).getString("repo", "").orEmpty().trim()
-    fun configured(ctx: Context) = token(ctx).isNotBlank() && repo(ctx).isNotBlank()
-    fun save(ctx: Context, repo: String, token: String) =
-        prefs(ctx).edit().putString("repo", repo.trim()).putString("token", token.trim())
+    fun configured(ctx: Context) = (usesGitHubApp(ctx) || personalToken(ctx).isNotBlank()) && repo(ctx).isNotBlank()
+
+    @Synchronized
+    fun save(ctx: Context, repo: String, token: String) {
+        if (usesGitHubApp(ctx)) vault(ctx).clear()
+        settingsEdit(ctx, repo).remove("github_app_connection").putString("token", token.trim()).apply()
+    }
+
+    @Synchronized
+    internal fun saveGitHubApp(ctx: Context, repo: String, tokens: GitHubAppTokens) {
+        val id = UUID.randomUUID().toString()
+        writeAppTokens(ctx, id, tokens)
+        settingsEdit(ctx, repo).remove("token").putString("github_app_connection", id).apply()
+    }
+
+    internal fun saveAppRepository(ctx: Context, repo: String) {
+        settingsEdit(ctx, repo).apply()
+    }
+
+    private fun settingsEdit(ctx: Context, repo: String) = prefs(ctx).edit().putString("repo", repo.trim())
             .remove("snapshot").remove("task_repos").remove("owner").remove("completed_snapshot").remove("search_snapshot").remove("synced").remove("error")
             .remove("sync_problem").remove("refreshing")
-            .remove("activity").remove("activity_synced").remove("activity_candidates").remove("activity_watched").remove("usage").apply()
+            .remove("activity").remove("activity_synced").remove("activity_candidates").remove("activity_watched").remove("usage").remove("runs")
 
     internal fun activity(ctx: Context): List<ActivityItem> = runCatching {
         JSONArray(prefs(ctx).getString("activity", "[]")).objects().map(ActivityItem::read)
@@ -99,7 +163,7 @@ object Store {
         ctx: Context,
         fetch: suspend (GitHub, String) -> Pair<List<ActivityItem>, List<String>> = { gh, since -> gh.activity(since) },
     ): Pair<List<ActivityItem>, String> = activityMutex.withLock {
-        val config = repo(ctx) to token(ctx)
+        val config = configKey(ctx)
         val watched = watchedRepos(ctx)
         val now = System.currentTimeMillis()
         val since = java.time.Instant.ofEpochMilli(now - 72 * 3_600_000L).toString()
@@ -119,7 +183,7 @@ object Store {
                 warnings += "$repo: ${describe(e)} (saved activity, may be out of date)"
             }
         }
-        if (config != (repo(ctx) to token(ctx)) || watched != watchedRepos(ctx)) throw CancellationException("Activity configuration changed")
+        if (config != configKey(ctx) || watched != watchedRepos(ctx)) throw CancellationException("Activity configuration changed")
         val completedAt = System.currentTimeMillis()
         val sorted = activitySince(items, 72, completedAt)
         prefs(ctx).edit().putString("activity", JSONArray(sorted.map { it.json() }).toString())
@@ -129,10 +193,10 @@ object Store {
 
     internal fun usage(ctx: Context): String = prefs(ctx).getString("usage", "").orEmpty()
     internal suspend fun syncUsage(ctx: Context): String {
-        val config = repo(ctx) to token(ctx)
+        val config = configKey(ctx)
         val text = github(ctx).file("usage.json", "agent-state").text
         readUsage(text)
-        if (config != (repo(ctx) to token(ctx))) throw CancellationException("Usage configuration changed")
+        if (config != configKey(ctx)) throw CancellationException("Usage configuration changed")
         prefs(ctx).edit().putString("usage", text).apply()
         return text
     }
@@ -143,7 +207,7 @@ object Store {
 
     /** Re-read each repo's runs/index.json; a repo without a runs branch has no runs, one that fails keeps its saved runs. */
     internal suspend fun syncRuns(ctx: Context): Pair<List<RunEntry>, String> {
-        val config = repo(ctx) to token(ctx)
+        val config = configKey(ctx)
         val saved = runs(ctx).groupBy { it.repo }
         val warnings = mutableListOf<String>()
         val byRepo = (listOf(repo(ctx)) + taskRepos(ctx).map { it.fullName }).distinct().associateWith { r ->
@@ -154,7 +218,7 @@ object Store {
                 if (e.code == 404) emptyList() else { warnings += "$r: ${describe(e)}"; saved[r].orEmpty() }
             } catch (e: Exception) { warnings += "$r: ${describe(e)}"; saved[r].orEmpty() }
         }
-        if (config != (repo(ctx) to token(ctx))) throw CancellationException("Runs configuration changed")
+        if (config != configKey(ctx)) throw CancellationException("Runs configuration changed")
         val merged = mergeRuns(byRepo)
         prefs(ctx).edit().putString("runs", runsJson(merged)).apply()
         return merged to warnings.joinToString("\n")
@@ -186,9 +250,17 @@ object Store {
 
     /** The home repo's client, or another task repo's (owner/name). */
     fun github(ctx: Context, repo: String = ""): GitHub {
-        if (repo.isEmpty()) return GitHub(token(ctx), repo(ctx))
+        if (repo.isEmpty()) return client(ctx, repo(ctx))
         val alias = taskRepos(ctx).firstOrNull { it.fullName.equals(repo, ignoreCase = true) }?.name.orEmpty()
-        return GitHub(token(ctx), repo, tag = repo, repoAlias = alias)
+        return client(ctx, repo, tag = repo, alias = alias)
+    }
+
+    internal fun client(ctx: Context, repo: String, tag: String = "", alias: String = ""): GitHub {
+        val id = appId(ctx)
+        return GitHub(
+            personalToken(ctx), repo, tag = tag, repoAlias = alias,
+            tokenProvider = if (id == null) null else { { provider(ctx).access(id) } },
+        )
     }
 
     /** The owner's GitHub login, from home's workspace.yaml (`github:`), as last read; "" if unknown. */
@@ -207,6 +279,7 @@ object Store {
 
     /** Re-read repos.yaml; on failure keep the last list, so a hiccup never hides a repo's tasks. */
     private suspend fun refreshTaskRepos(ctx: Context) {
+        val config = configKey(ctx)
         val repos = try {
             readTaskRepoRegistry(github(ctx))
         } catch (e: CancellationException) {
@@ -214,9 +287,12 @@ object Store {
         } catch (_: Exception) {
             return
         }
+        if (config != configKey(ctx)) throw CancellationException("Workspace changed")
         prefs(ctx).edit().putString("task_repos", JSONObject(repos).toString()).apply()
         try {
-            prefs(ctx).edit().putString("owner", ownerOf(github(ctx).file("workspace.yaml").text)).apply()
+            val owner = ownerOf(github(ctx).file("workspace.yaml").text)
+            if (config != configKey(ctx)) throw CancellationException("Workspace changed")
+            prefs(ctx).edit().putString("owner", owner).apply()
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -266,13 +342,12 @@ object Store {
         fetch: suspend (GitHub) -> List<Issue>,
     ): List<Issue> =
         buildList {
-            val token = token(ctx)
-            addAll(fetch(GitHub(token, repo(ctx))))
+            addAll(fetch(github(ctx)))
             val repos = taskRepos(ctx).distinctBy { it.fullName.lowercase() }
             for (taskRepo in repos) {
                 val (alias, remote) = taskRepo
                 try {
-                    addAll(fetch(GitHub(token, remote, tag = remote, repoAlias = alias)))
+                    addAll(fetch(client(ctx, remote, tag = remote, alias = alias)))
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -283,9 +358,9 @@ object Store {
 
     /** Fetch once on opening/refresh, never per keystroke; don't affect queue/widget sync state. */
     internal suspend fun syncSearch(ctx: Context, fetch: suspend () -> List<Issue>): List<Issue> = searchMutex.withLock {
-        val config = repo(ctx) to token(ctx)
+        val config = configKey(ctx)
         val issues = fetch()
-        if (config != (repo(ctx) to token(ctx))) throw CancellationException("Search configuration changed")
+        if (config != configKey(ctx)) throw CancellationException("Search configuration changed")
         prefs(ctx).edit().putString("search_snapshot", JSONArray(issues.map(GitHub::toJson)).toString()).apply()
         issues
     }
@@ -354,8 +429,10 @@ object Store {
         ctx: Context, fetch: suspend () -> List<Issue>, redraw: suspend () -> Unit,
         failures: () -> Map<String, Exception> = { emptyMap() },
     ): List<Issue> = syncMutex.withLock {
+        val config = configKey(ctx)
         try {
             val issues = fetch()
+            if (config != configKey(ctx)) throw CancellationException("Workspace changed")
             val missed = failures()
             prefs(ctx).edit()
                 .putString("snapshot", JSONArray(issues.map(GitHub::toJson)).toString())
@@ -373,6 +450,7 @@ object Store {
             // WorkManager can stop work when constraints change. That is not a failed network request.
             throw e
         } catch (e: Exception) {
+            if (config != configKey(ctx)) throw CancellationException("Workspace changed")
             prefs(ctx).edit().putString("error", describe(e)).putString("sync_problem", classifySyncError(e).name).apply()
             throw e
         } finally {

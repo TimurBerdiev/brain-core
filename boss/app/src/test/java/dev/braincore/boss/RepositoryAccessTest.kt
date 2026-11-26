@@ -85,4 +85,25 @@ class RepositoryAccessTest {
         assertFalse(taskRepo.contents!!.denied)
         assertTrue(taskRepo.contents.problem!!.contains("rate limit"))
     }
+
+    @Test fun appGrantMustIncludeTheRepositoryEvenIfItsPublicIssuesCanBeRead() = runBlocking {
+        val requests = mutableListOf<String>()
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            assertEquals("Bearer refreshed-token", request.header("Authorization"))
+            val path = request.url.encodedPath
+            requests += path
+            val body = when (path) {
+                "/user/installations" -> """{"installations":[{"id":1,"account":{"login":"another"}},{"id":2,"account":{"login":"ALEX"}}]}"""
+                "/user/installations/2/repositories" -> """{"repositories":[{"full_name":"alex/STUDIO"}]}"""
+                else -> "[]"
+            }
+            response(request, 200, body).build()
+        }.build()
+        val brain = GitHub("", home, client = client, tokenProvider = { "refreshed-token" })
+        brain.check()
+        assertFalse(brain.hasAppAccess())
+        assertTrue(GitHub("", project, client = client, tokenProvider = { "refreshed-token" }).hasAppAccess())
+        assertFalse("/user/installations/1/repositories" in requests)
+    }
 }
