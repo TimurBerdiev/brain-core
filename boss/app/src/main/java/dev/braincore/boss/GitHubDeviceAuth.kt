@@ -11,6 +11,9 @@ import okhttp3.Request
 import okhttp3.Response
 import org.json.JSONObject
 import java.io.IOException
+import java.io.InterruptedIOException
+import java.net.SocketException
+import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -66,21 +69,29 @@ internal class GitHubDeviceAuth(
 
     suspend fun authorize(code: DeviceCode): GitHubAppTokens {
         var interval = code.intervalMillis
+        var pollDelay = interval
         while (true) {
             val remaining = code.deadlineMillis - elapsed()
             if (remaining <= 0) throw authFailure("expired_token")
-            wait(minOf(interval, remaining))
+            wait(minOf(pollDelay, remaining))
             if (elapsed() >= code.deadlineMillis) throw authFailure("expired_token")
-            val result = post(
-                "oauth/access_token", "device_code" to code.deviceCode,
-                "grant_type" to "urn:ietf:params:oauth:grant-type:device_code",
-            )
+            val result = try {
+                post(
+                    "oauth/access_token", "device_code" to code.deviceCode,
+                    "grant_type" to "urn:ietf:params:oauth:grant-type:device_code",
+                )
+            } catch (e: IOException) {
+                if (e !is InterruptedIOException && e !is SocketException && e !is UnknownHostException) throw e
+                pollDelay = maxOf(interval, (pollDelay * 2).coerceAtMost(60_000L))
+                continue
+            }
             when (val error = result.authError()) {
                 null -> return result.tokens()
                 "authorization_pending" -> Unit
                 "slow_down" -> interval = maxOf(interval + 5_000L, result.optLong("interval") * 1_000L)
                 else -> throw authFailure(error)
             }
+            pollDelay = interval
         }
     }
 

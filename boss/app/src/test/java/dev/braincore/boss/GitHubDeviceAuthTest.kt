@@ -10,6 +10,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import java.net.SocketTimeoutException
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -19,7 +20,11 @@ class GitHubDeviceAuthTest {
     private val waits = mutableListOf<Long>()
     private var time = 0L
 
-    private fun auth(vararg responses: String, wait: suspend (Long) -> Unit = { waits += it; time += it }): GitHubDeviceAuth {
+    private fun auth(
+        vararg responses: String,
+        timeoutRequests: Set<Int> = emptySet(),
+        wait: suspend (Long) -> Unit = { waits += it; time += it },
+    ): GitHubDeviceAuth {
         val queue = ArrayDeque(responses.toList())
         val http = OkHttpClient.Builder().addInterceptor { chain ->
             val req = chain.request()
@@ -28,6 +33,7 @@ class GitHubDeviceAuthTest {
             assertEquals("POST", req.method)
             assertEquals("application/json", req.header("Accept"))
             requests += req.url.encodedPath to (0 until body.size).associate { body.name(it) to body.value(it) }
+            if (requests.size in timeoutRequests) throw SocketTimeoutException()
             Response.Builder().request(req).protocol(Protocol.HTTP_1_1).code(200)
                 .message("OK").body(queue.removeFirst().toResponseBody()).build()
         }.build()
@@ -60,6 +66,24 @@ class GitHubDeviceAuthTest {
     @Test fun stopsPollingAtTheDeadline() = runBlocking {
         val auth = auth(deviceResponse(expires = 7), """{"error":"authorization_pending"}""")
         val code = auth.start()
+        val error = runCatching { auth.authorize(code) }.exceptionOrNull()
+        assertTrue(error is GitHubAuthException && error.message!!.contains("expired"))
+        assertEquals(listOf(5_000L, 2_000L), waits)
+        assertEquals(2, requests.size)
+    }
+
+    @Test fun backsOffThroughTimeoutsAndResumesNormalPollingAfterRecovery() = runBlocking {
+        val auth = auth(deviceResponse(), """{"error":"authorization_pending"}""", tokenResponse,
+            timeoutRequests = setOf(2, 3))
+
+        assertEquals("ghu_access", auth.authorize(auth.start()).access)
+        assertEquals(listOf(5_000L, 10_000L, 20_000L, 5_000L), waits)
+    }
+
+    @Test fun stopsRetryingAfterTheCodeExpires() = runBlocking {
+        val auth = auth(deviceResponse(expires = 7), timeoutRequests = setOf(2))
+        val code = auth.start()
+
         val error = runCatching { auth.authorize(code) }.exceptionOrNull()
         assertTrue(error is GitHubAuthException && error.message!!.contains("expired"))
         assertEquals(listOf(5_000L, 2_000L), waits)
