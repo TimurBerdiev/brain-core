@@ -27,30 +27,32 @@ test('sample queue, completed, answer, move and search on iPhone', async ({ page
   await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'On hold' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Backlog' })).toBeVisible();
-  await expect(page.getByText('Review the analytics plan')).toBeHidden();
+  await expect(page.getByText('Review how Boss shows decision priorities')).toBeHidden();
+  const decisionRows = page.locator('.group.input-needed button');
+  await expect(decisionRows).toHaveText([/Resume Boss work after a decision.*P1/, /Make Boss easy to open on iPhone.*P2/]);
   await expect(page.locator('main')).not.toContainText('null');
   await page.screenshot({ path: `${shots}list.png`, fullPage: true });
 
   await page.getByRole('checkbox', { name: "Show everyone's tasks" }).check();
-  await expect(page.getByText('Review the analytics plan')).toBeVisible();
-  await page.getByRole('button', { name: 'site: off' }).click();
-  await expect(page.getByText('Choose the launch checklist')).toBeHidden();
-  await expect(page.getByText('Update the landing page copy')).toBeVisible();
+  await expect(page.getByText('Review how Boss shows decision priorities')).toBeVisible();
+  await page.getByRole('button', { name: 'checks: off' }).click();
+  await expect(page.getByText('Resume Boss work after a decision')).toBeHidden();
+  await expect(page.getByText('Check the Boss preview build')).toBeVisible();
   await page.getByRole('button', { name: 'All', exact: true }).click();
   await page.getByText('Completed', { exact: true }).click();
-  await expect(page.getByRole('button', { name: /Set up the project workspace/ })).toBeVisible();
-  await expect(page.getByText('Retire the old launch notes')).toBeHidden();
+  await expect(page.getByRole('button', { name: /Publish the Boss web app shell/ })).toBeVisible();
+  await expect(page.getByText('Research a separate Boss demo app')).toBeHidden();
   await page.getByText('Completed', { exact: true }).click();
 
-  await page.getByRole('button', { name: /Choose the launch checklist/ }).click();
-  await expect(page.getByRole('heading', { name: 'Which checklist should we use for launch?' })).toBeVisible();
-  await expect(page.getByText('Recommendation: Short checklist')).toBeVisible();
+  await page.getByRole('button', { name: /Resume Boss work after a decision/ }).click();
+  await expect(page.getByRole('heading', { name: 'How should the first Boss worker resume after an answer?' })).toBeVisible();
+  await expect(page.getByText('Recommendation: Run on demand', { exact: false })).toBeVisible();
   await page.screenshot({ path: `${shots}card.png`, fullPage: true });
-  await page.getByRole('button', { name: 'Short checklist', exact: true }).click();
+  await page.getByRole('button', { name: 'Run on demand', exact: true }).click();
   await page.getByRole('button', { name: 'Send answer' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Answer sent. Moved to Ready.' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'For you' })).toBeHidden();
-  await page.getByRole('button', { name: /Choose the launch checklist/ }).click();
+  await expect(page.locator('.group.input-needed')).not.toContainText('Resume Boss work after a decision');
+  await page.getByRole('button', { name: /Resume Boss work after a decision/ }).click();
   await page.getByText('Log (2)', { exact: true }).click();
   await expect(page.getByText('answer', { exact: true })).toBeVisible();
 
@@ -62,32 +64,63 @@ test('sample queue, completed, answer, move and search on iPhone', async ({ page
   await page.screenshot({ path: `${shots}move.png` });
   await dialog.getByRole('button', { name: 'Move task' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Moved to On hold.' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Choose the launch checklist.*Release approval/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Resume Boss work after a decision.*Release approval/ })).toBeVisible();
 
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   const search = page.getByRole('searchbox', { name: 'Search all tasks' });
-  await search.fill('site#38');
-  await expect(page.getByText('Update the landing page copy')).toBeVisible();
-  await expect(page.getByText('Choose the launch checklist')).toBeHidden();
+  await search.fill('checks#38');
+  await expect(page.getByText('Check the Boss preview build')).toBeVisible();
+  await expect(page.getByText('Resume Boss work after a decision')).toBeHidden();
   await expect(page.locator('main')).not.toContainText('null');
   await page.screenshot({ path: `${shots}search.png`, fullPage: true });
-  await search.fill('demo/brain#42');
-  await expect(page.getByText('Choose the launch checklist')).toBeVisible();
-  await search.fill('old launch notes');
-  await expect(page.getByText('Retire the old launch notes')).toBeVisible();
+  await search.fill('demo/boss#42');
+  await expect(page.getByText('Resume Boss work after a decision')).toBeVisible();
+  await search.fill('separate Boss demo');
+  await expect(page.getByText('Research a separate Boss demo app')).toBeVisible();
   expect(external).toEqual([]);
 });
 
 test('Ask instead sends a question and returns the task to Ready', async ({ page }) => {
   await page.goto(app + '?demo');
-  await page.getByRole('button', { name: /Choose the launch checklist/ }).click();
+  await page.getByRole('button', { name: /Resume Boss work after a decision/ }).click();
   await page.getByText('Ask instead', { exact: true }).click();
   await page.getByRole('textbox', { name: 'Your question' }).fill('Who signs off on the release?');
   await page.getByRole('button', { name: 'Send question' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Question sent. Moved to Ready.' })).toBeVisible();
-  await page.getByRole('button', { name: /Choose the launch checklist/ }).click();
+  await page.getByRole('button', { name: /Resume Boss work after a decision/ }).click();
   await page.getByText('Log (2)', { exact: true }).click();
   await expect(page.getByText('Who signs off on the release?', { exact: true })).toBeVisible();
+});
+
+test('a claimed Ready task shows the worker on the queue and on detail', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('boss-web.settings', JSON.stringify({ repo: 'owner/brain', token: 'sample' }));
+    const issue = { number: 42, title: 'Resume Boss work', body: '', labels: [{ name: 'ready' }],
+      state: 'open', updated_at: new Date().toISOString(), html_url: '' };
+    const responses = {
+      'contents/repos.yaml': { content: btoa('repos: {}') },
+      'contents/workspace.yaml': { content: btoa('github: owner') },
+      issues: [issue],
+      'issues/42': issue,
+      'issues/42/comments': [],
+      'git/matching-refs/heads/claim': [{ ref: 'refs/heads/claim/42', object: { sha: 'tip' } }],
+      'git/commits/tip': { message: 'claim #42 by dogfood-worker', committer: { date: new Date().toISOString() } },
+    };
+    const realFetch = window.fetch;
+    window.fetch = (input, options) => {
+      const url = new URL(input);
+      if (url.origin !== 'https://api.github.com') return realFetch(input, options);
+      const path = url.pathname.replace('/repos/owner/brain/', '');
+      return Promise.resolve(Response.json(responses[path]));
+    };
+  });
+  const claim = 'In progress · dogfood-worker';
+  await page.goto(app);
+  const task = page.getByRole('button', { name: /Resume Boss work/ });
+  await expect(task).toContainText(claim);
+  await task.click();
+  await expect(page.getByRole('heading', { name: 'Resume Boss work' })).toBeVisible();
+  await expect(page.getByText(claim, { exact: true })).toBeVisible();
 });
 
 test('collapsed task details and log do not request embedded images', async ({ page }) => {

@@ -315,7 +315,11 @@ def parse_ref(text):
 
 
 def api(path, method="GET", data=None, paginate=False, repo_name=None):
-    args = ["gh", "api", "-X", method, f"repos/{full(repo_name)}/{path}"]
+    return repo_api(full(repo_name), path, method, data, paginate)
+
+
+def repo_api(repo_slug, path, method="GET", data=None, paginate=False):
+    args = ["gh", "api", "-X", method, f"repos/{repo_slug}/{path}"]
     if paginate:
         args += ["--paginate", "--jq", ".[]"]  # one JSON object per line across all pages
     if data is not None:
@@ -464,7 +468,11 @@ def set_status(issue, st, waiting_on=None, check_after=None, keep_body=False):
 
 def read_card(path):
     """Check a decision card (a slide for the owner) and return (question, text). Exits with the reason if it's not one."""
-    text = (sys.stdin.read() if path == "-" else open(path).read()).strip()
+    return validate_card(sys.stdin.read() if path == "-" else Path(path).read_text())
+
+
+def validate_card(text):
+    text = text.strip()
     lines = [l for l in text.splitlines() if l.strip()]
     if not lines or not lines[0].startswith("### "):
         raise SystemExit("card: the first line must be the question, as `### <question>`")
@@ -844,4 +852,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

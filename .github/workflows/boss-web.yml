@@ -52,7 +52,7 @@ jobs:
       - name: Stage the public app shell
         run: |
           mkdir _site
-          cp boss-web/*.html boss-web/{app,demo,github,markdown,model,sw}.js boss-web/*.css boss-web/icon* boss-web/*.webmanifest _site/
+          cp boss-web/*.html boss-web/{app,demo,github,markdown,model,sw}.js boss-web/*.css boss-web/dogfood.json boss-web/icon* boss-web/*.webmanifest _site/
           mkdir _site/vendor
           cp boss-web/vendor/{js-yaml.mjs,LICENSE} _site/vendor/
       - uses: actions/upload-pages-artifact@v3

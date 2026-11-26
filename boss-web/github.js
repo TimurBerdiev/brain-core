@@ -1,7 +1,11 @@
 import { load, CORE_SCHEMA } from './vendor/js-yaml.mjs';
-import { apiImageUrl, claimHolder, issueModel, ownerOf, statusChange, taskReposOf } from './model.js';
+import { apiImageUrl, belongsTo, claimHolder, issueModel, ownerOf, statusChange, taskReposOf } from './model.js';
 
 const API = 'https://api.github.com';
+export function isLoopback(location) {
+  return location?.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+}
+
 export const validRepo = value => /^[a-z\d][a-z\d-]*\/[a-z\d_.-]+$/i.test(value)
   && !['.', '..'].includes(value.split('/')[1]);
 
@@ -12,8 +16,11 @@ function fromApi(item, repo, repoAlias) {
 }
 
 export class GitHub {
-  constructor(home, token) {
+  constructor(home, token, { localOrigin } = {}) {
     if (!validRepo(home)) throw new Error('Enter a GitHub repository as owner/name.');
+    const origin = localOrigin ? new URL(localOrigin) : null;
+    if (origin && (!isLoopback(origin) || token)) throw new Error('Local dogfood requires loopback and no GitHub token.');
+    this.api = origin ? `${origin.origin}/api` : API;
     this.home = home;
     this.token = token;
     this.repos = new Map();
@@ -22,8 +29,9 @@ export class GitHub {
 
   async request(url, { method = 'GET', body, accept = 'application/vnd.github+json' } = {}) {
     const target = new URL(url);
-    if (target.origin !== API) throw new Error('Invalid GitHub API address.');
-    const headers = { Authorization: `Bearer ${this.token}`, Accept: accept, 'X-GitHub-Api-Version': '2022-11-28' };
+    if (!target.href.startsWith(`${this.api}/`)) throw new Error('Invalid GitHub API address.');
+    const headers = { Accept: accept, 'X-GitHub-Api-Version': '2022-11-28' };
+    if (this.token) headers.Authorization = `Bearer ${this.token}`;
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     let response;
     try {
@@ -42,7 +50,7 @@ export class GitHub {
   }
 
   async call(repo, path, options) {
-    const response = await this.request(`${API}/repos/${repo || this.home}/${path}`, options);
+    const response = await this.request(`${this.api}/repos/${repo || this.home}/${path}`, options);
     return response.json();
   }
 
@@ -77,12 +85,21 @@ export class GitHub {
         .filter(([, repo]) => validRepo(repo) && repo.toLowerCase() !== this.home.toLowerCase()));
       this.registryLoaded = true;
     } catch (error) {
-      warnings.push(`repos.yaml: ${error.message}`);
+      if (error.status === 404 && !this.repos.size) this.registryLoaded = true;
+      else warnings.push(`repos.yaml: ${error.message}`);
     }
     try {
       this.owner = ownerOf(await this.file('workspace.yaml'));
     } catch (error) {
-      warnings.push(`workspace.yaml: ${error.message}`);
+      if (error.status !== 404) warnings.push(`workspace.yaml: ${error.message}`);
+      else if (!this.owner) {
+        try {
+          const response = await this.request(`${this.api}/user`);
+          this.owner = (await response.json()).login ?? '';
+        } catch (identityError) {
+          warnings.push(`Could not identify your GitHub account: ${identityError.message}`);
+        }
+      }
     }
     return warnings;
   }
@@ -101,7 +118,13 @@ export class GitHub {
           .map(item => fromApi(item, repo, alias));
         if (kind === 'queue') {
           const claims = await this.claims(repo, issues).catch(() => new Map());
-          issues = issues.map(issue => issueModel({ ...issue, claim: claims.get(issue.number) ?? '' }));
+          issues = await Promise.all(issues.map(async issue => {
+            if (issue.status !== 'input-needed' || !belongsTo(issue, this.owner)) {
+              return issueModel({ ...issue, claim: claims.get(issue.number) ?? '' });
+            }
+            const waitingSince = await this.waitingSince(issue).catch(() => '');
+            return { ...issue, waitingSince };
+          }));
         }
         return { issues };
       } catch (error) {
@@ -111,6 +134,13 @@ export class GitHub {
       }
     }));
     return { issues: results.flatMap(r => r.issues), owner: this.owner, warnings: warnings.concat(results.flatMap(r => r.warning ?? [])) };
+  }
+
+  async waitingSince(issue) {
+    const events = await this.pages(issue.repo, `issues/${issue.number}/events`);
+    const isWait = e => ['input-needed', 'in-review'].includes(e.label?.name);
+    return events.filter(e => e.event === 'labeled' && isWait(e))
+      .reduce((latest, e) => e.created_at > latest ? e.created_at : latest, '');
   }
 
   async claims(repo, issues) {
@@ -130,7 +160,9 @@ export class GitHub {
 
   async detail(issue) {
     const [fresh, comments] = await Promise.all([this.fresh(issue), this.pages(issue.repo, `issues/${issue.number}/comments`)]);
-    return { issue: fresh, comments: comments.map(c => ({ body: c.body ?? '', author: c.user?.login ?? '', url: c.html_url })) };
+    const claims = await this.claims(fresh.repo, [fresh]).catch(() => new Map());
+    return { issue: issueModel({ ...fresh, claim: claims.get(fresh.number) ?? '' }),
+      comments: comments.map(c => ({ body: c.body ?? '', author: c.user?.login ?? '', url: c.html_url })) };
   }
 
   async fresh(issue) {
@@ -162,7 +194,8 @@ export class GitHub {
   async image(url) {
     const api = apiImageUrl(url);
     if (!api) return url;
-    const response = await this.request(api, { accept: 'application/vnd.github.raw+json' });
+    const response = await this.request(this.api + new URL(api).pathname + new URL(api).search,
+      { accept: 'application/vnd.github.raw+json' });
     return URL.createObjectURL(await response.blob());
   }
 }

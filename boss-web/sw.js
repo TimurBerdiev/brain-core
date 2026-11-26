@@ -1,7 +1,7 @@
 const prefix = `boss-shell:${self.registration.scope}:`;
-const CACHE = `${prefix}1`;
+const CACHE = `${prefix}2`;
 const FILES = ['./', './index.html', './style.css', './app.js', './model.js', './github.js', './demo.js',
-  './markdown.js', './vendor/js-yaml.mjs', './manifest.webmanifest', './icon.svg', './icon-180.png', './icon-192.png', './icon-512.png'];
+  './markdown.js', './dogfood.json', './vendor/js-yaml.mjs', './manifest.webmanifest', './icon.svg', './icon-180.png', './icon-192.png', './icon-512.png'];
 const shell = new Set(FILES.map(path => new URL(path, self.registration.scope).href));
 
 self.addEventListener('install', event => {

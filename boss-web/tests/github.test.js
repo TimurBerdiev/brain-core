@@ -26,6 +26,12 @@ test('workspace discovery, issue paging, fresh card reply and authenticated imag
         if (page === '1') return Response.json(Array.from({ length: 100 }, () => ({ pull_request: {} })));
         return Response.json([rawIssue]);
       case 'web/issues': return Response.json([{ ...rawIssue, number: 38 }]);
+      case 'brain/issues/42/events': return Response.json([]);
+      case 'web/issues/38/events': return Response.json([
+        { event: 'labeled', label: { name: 'in-review' }, created_at: '2026-11-01T10:00:00Z' },
+        { event: 'labeled', label: { name: 'input-needed' }, created_at: '2026-11-11T10:00:00Z' },
+        { event: 'labeled', label: { name: 'p1' }, created_at: '2026-11-25T10:00:00Z' },
+      ]);
       case 'web/issues/38/comments':
         return Response.json(options.method === 'GET' ? [{ body: '<!-- card -->\n### Launch?', user: { login: 'agent' } }] : {});
       case 'web/issues/38': return Response.json(options.method === 'GET' ? { ...rawIssue, number: 38 }
@@ -43,6 +49,7 @@ test('workspace discovery, issue paging, fresh card reply and authenticated imag
   assert.equal(queue.owner, 'owner');
   assert.deepEqual(queue.warnings, []);
   assert.deepEqual(queue.issues.map(i => i.ref), ['#42', 'site#38']);
+  assert.equal(queue.issues[1].waitingSince, '2026-11-11T10:00:00Z');
   const { issue, comments } = await client.detail(queue.issues[1]);
   assert.equal(comments[0].author, 'agent');
   assert.equal((await client.reply(issue, '<!-- answer -->')).status, 'ready');
@@ -76,4 +83,22 @@ test('search and completed discover task repos on a fresh connection without a q
   assert.equal(registryReads, 1);
   assert.deepEqual(search.issues.map(issue => issue.ref), ['site#42']);
   assert.deepEqual(completed.issues.map(issue => issue.ref), ['site#42']);
+});
+
+test('a standalone task repo uses the signed-in account when Brain files are absent', async t => {
+  t.mock.method(globalThis, 'fetch', async url => {
+    switch (url.pathname) {
+      case '/repos/team/boss/contents/repos.yaml':
+      case '/repos/team/boss/contents/workspace.yaml':
+        return Response.json({ message: 'Not Found' }, { status: 404 });
+      case '/user': return Response.json({ login: 'Roman' });
+      case '/repos/team/boss/issues':
+        return Response.json([{ ...rawIssue, assignees: [{ login: 'Timur' }] }]);
+      default: assert.fail(`Unexpected request: ${url.pathname}`);
+    }
+  });
+  const queue = await new GitHub('team/boss', 'sample-token').list('queue');
+  assert.equal(queue.owner, 'Roman');
+  assert.deepEqual(queue.warnings, []);
+  assert.deepEqual(queue.issues[0].assignees, ['Timur']);
 });

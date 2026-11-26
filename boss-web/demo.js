@@ -1,37 +1,49 @@
 import { issueModel, statusChange } from './model.js';
 
-const samples = [
-  { number: 42, title: 'Choose the launch checklist', labels: ['input-needed', 'ws:launch'],
-    body: 'Waiting on: Pick the launch checklist\n\nThe launch is ready for a final handoff.' },
-  { number: 38, title: 'Update the landing page copy', labels: ['ready'], repo: 'demo/site', repoAlias: 'site',
-    claim: 'agent:web', body: 'Revise the homepage copy and send it for review.' },
-  { number: 29, title: 'Confirm the vendor timeline', labels: ['on-hold', 'ws:ops'],
-    body: 'Waiting on: Vendor reply\nCheck after: 2026-11-27\n\nFollow up when the new estimate arrives.' },
-  { number: 18, title: 'Draft the onboarding guide', labels: ['backlog', 'ws:launch'],
-    body: 'Write a short guide for the next teammate.' },
-  { number: 12, title: 'Review the analytics plan', labels: ['input-needed', 'ws:ops'], assignees: ['alex'] },
-  { number: 7, title: 'Set up the project workspace', state: 'closed', stateReason: 'completed' },
-  { number: 4, title: 'Retire the old launch notes', state: 'closed', stateReason: 'not_planned' },
+const history = [
+  { number: 29, title: 'Check how the Boss link opens from Messages', labels: ['on-hold', 'ws:boss'],
+    body: 'Waiting on: iPhone test device\n\nRepeat the first-run test from a shared link.' },
+  { number: 18, title: 'Explore a faster Boss task handoff', labels: ['backlog', 'ws:boss'],
+    body: 'Look for repeated steps when moving a task between reviewers.' },
+  { number: 7, title: 'Publish the Boss web app shell', state: 'closed', stateReason: 'completed' },
+  { number: 4, title: 'Research a separate Boss demo app', state: 'closed', stateReason: 'not_planned' },
 ];
 
 export class Demo {
   constructor() {
-    this.home = 'demo/brain';
-    this.issues = new Map(samples.map(sample => {
+    this.home = 'demo/boss';
+    this.issues = new Map();
+    this.comments = new Map();
+  }
+
+  async load() {
+    const response = await fetch(new URL('./dogfood.json', import.meta.url));
+    if (!response.ok) throw new Error('Could not load the Boss sample tasks.');
+    const catalog = await response.json();
+    const samples = catalog.map((item, index) => {
+      const number = index + 41;
+      const card = item.card;
+      const sections = [['Goal', item.goal], ['Done when', item.done], ['Plan', item.plan], ['Next', item.next]];
+      const body = [...(card ? [`Waiting on: ${card[0].slice(4)}`] : []),
+        ...sections.map(([title, text]) => `## ${title}\n\n${text}`)].join('\n\n');
+      if (card) this.comments.set(String(number), [{ author: 'boss-worker', body: ['<!-- card -->', ...card].join('\n') }]);
+      return { number, title: item.title, body, assignees: [item.owner],
+        labels: [card ? 'input-needed' : 'ready', item.priority, 'ws:boss'] };
+    });
+    samples.push(...history, { number: 38, title: 'Check the Boss preview build', labels: ['ready'],
+      repo: 'demo/checks', repoAlias: 'checks', claim: 'agent:web', body: 'Check the preview on a phone-sized screen.' });
+    for (const sample of samples) {
       const issue = issueModel({ updatedAt: '2026-11-25T10:00:00Z', ...sample });
-      return [issue.key, issue];
-    }));
-    this.comments = new Map([['42', [{ author: 'release-agent', body: [
-      '<!-- card -->', '### Which checklist should we use for launch?', '',
-      'Options: Short checklist | Full checklist', 'Recommend: Short checklist', '',
-      'The **short checklist** covers all required release checks. The full checklist adds a second review.',
-    ].join('\n') }]]]);
+      this.issues.set(issue.key, issue);
+    }
   }
 
   async list(kind) {
+    this.loading ??= this.load().catch(error => { this.loading = null; throw error; });
+    await this.loading;
     return { issues: [...this.issues.values()].filter(i => kind === 'search'
       || (kind === 'completed' ? i.stateReason === 'completed' : i.state === 'open')),
-    owner: 'demo', warnings: [] };
+    owner: 'timur', warnings: [] };
   }
 
   async detail(issue) {
@@ -48,7 +60,7 @@ export class Demo {
   }
 
   async reply(issue, body) {
-    this.comments.set(issue.key, [...(this.comments.get(issue.key) ?? []), { author: 'demo', body }]);
+    this.comments.set(issue.key, [...(this.comments.get(issue.key) ?? []), { author: 'timur', body }]);
     return this.move(issue, 'ready');
   }
 

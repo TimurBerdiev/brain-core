@@ -84,6 +84,23 @@ test('assignee and workstream filters are for the queue, not search', () => {
   assert.deepEqual(searchIssues(issues, 'team/missing#7', 'team/brain'), []);
 });
 
+test('only For you sorts explicit priorities first, then longest waiting', () => {
+  const date = day => `2026-11-${day}T10:00:00Z`;
+  const issue = (number, priority, waiting, updated, status = 'input-needed', assignees = []) =>
+    base({ number, labels: [status, ...(priority ? [priority] : [])],
+      waitingSince: waiting ? date(waiting) : '', updatedAt: date(updated), assignees });
+  const issues = [
+    issue(1, '', 10, 10), issue(2, 'p3', 11, 11), issue(3, 'p2', 12, 12),
+    issue(4, 'p1', 13, 13), issue(5, 'p1', 11, 25), issue(6, 'p1', null, 12),
+    issue(7, 'p1', null, 10, 'ready'), issue(8, 'p3', null, 20, 'ready'),
+    issue(9, 'p1', 10, 10, 'input-needed', ['roman']), issue(10, 'p3', null, 20, 'on-hold'),
+  ];
+  const groups = Object.fromEntries(grouped(issues, 'timur'));
+  assert.deepEqual(groups['input-needed'].map(i => i.number), [5, 6, 4, 3, 2, 1]);
+  assert.deepEqual(groups.ready.map(i => i.number), [8, 7]);
+  assert.deepEqual(groups['on-hold'].map(i => i.number), [10, 9]);
+});
+
 test('reads task repo aliases and maps private card images', () => {
   assert.deepEqual(taskReposOf({ repos: {
     site: { tasks: 'assigned', remote: 'git@github.com:team/website.git' },
