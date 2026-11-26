@@ -1,0 +1,66 @@
+[
+  {
+    "id": "iphone-entry",
+    "title": "Make Boss easy to open on iPhone",
+    "owner": "timur",
+    "priority": "p2",
+    "goal": "Give the two Boss users a frictionless way to start reviewing work from their iPhones.",
+    "done": "Both users can open the Safari Home Screen app and find their own first decision card.",
+    "plan": "Check the first run on an iPhone and simplify the steps the users actually need.",
+    "next": "Read the answer to choose the first-run path, then validate it on an iPhone and note any friction.",
+    "card": [
+      "### What should we test first on iPhone?",
+      "Options: Home Screen install | Safari tab",
+      "Recommend: Home Screen install, so Boss is always one tap away",
+      "",
+      "- Home Screen install matches daily use, but it adds a short setup step.",
+      "- A Safari tab is faster to start, but it is easier to lose."
+    ]
+  },
+  {
+    "id": "resume-worker",
+    "title": "Resume Boss work after a decision",
+    "owner": "timur",
+    "priority": "p1",
+    "goal": "Make sure a Boss decision gets back to the worker building Boss.",
+    "done": "A worker claims an answered Boss issue, reads the answer, and records the next action in its log.",
+    "plan": "Try the pickup mechanism on the Boss queue before enabling a standing schedule.",
+    "next": "Read the answer. Run one scoped pickup for Run on demand, or set up a scoped schedule for Check on a schedule. Record the first pickup.",
+    "card": [
+      "### How should the first Boss worker resume after an answer?",
+      "Options: Run on demand | Check on a schedule",
+      "Recommend: Run on demand, so the first pickup is easy to watch",
+      "",
+      "- On demand needs one manual start after you answer.",
+      "- A schedule runs unattended, but an answer may wait until the next check."
+    ]
+  },
+  {
+    "id": "decision-review",
+    "title": "Review how Boss shows decision priorities",
+    "owner": "roman",
+    "priority": "p3",
+    "goal": "Make it clear which Boss decision needs attention first without opening every issue.",
+    "done": "A phone reviewer can distinguish urgent, routine, and unlabelled decisions at a glance.",
+    "plan": "Check the ranking on a narrow screen with mixed priorities.",
+    "next": "Read the answer about priority text, then check how it fits on a phone with long task titles.",
+    "card": [
+      "### What names should Boss show for decision priorities?",
+      "Options: P1, P2, P3 | Urgent, Normal, Low",
+      "Recommend: P1, P2, P3, to match the labels on the issues",
+      "",
+      "- Numbers are compact and match GitHub.",
+      "- Words are easier for newcomers but take more space."
+    ]
+  },
+  {
+    "id": "regression-check",
+    "title": "Check Boss queue and task history",
+    "owner": "roman",
+    "priority": "p3",
+    "goal": "Keep existing Boss flows working as the team starts using it to build Boss.",
+    "done": "Refresh, workstream filters, Move, completed history, and search pass a phone-sized smoke test.",
+    "plan": "Run the existing browser checks and add a regression only if a flow is uncovered.",
+    "next": "Run the existing PWA browser checks and note any gap in the issue log."
+  }
+]

@@ -6,17 +6,18 @@ const lines = text => text.split(/\r\n|\n|\r/);
 const compare = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 
 export function issueModel({ number, title = '', body = '', labels = [], state = 'open',
-  updatedAt = '', url = '', claim = '', stateReason = '', repo = '', repoAlias = '', assignees = [] }) {
+  updatedAt = '', waitingSince = '', url = '', claim = '', stateReason = '', repo = '', repoAlias = '', assignees = [] }) {
   const taskRepoName = repoAlias || repo.split('/').at(-1);
   const workstreams = labels.filter(l => l.startsWith('ws:')).map(l => l.slice(3));
   if (repo && !workstreams.includes(taskRepoName.toLowerCase())) workstreams.push(taskRepoName.toLowerCase());
   const status = state === 'closed' ? (stateReason === 'not_planned' ? 'dropped' : 'done')
     : OPEN.find(s => labels.some(l => (LEGACY.get(l) ?? l) === s)) || 'ready';
-  return { number, title, body, labels, state, updatedAt, url, claim, stateReason, repo, repoAlias, assignees,
+  const priorityLabel = ['p1', 'p2', 'p3'].find(label => labels.includes(label));
+  return { number, title, body, labels, state, updatedAt, waitingSince, url, claim, stateReason, repo, repoAlias, assignees,
     taskRepoName, workstreams, status, key: repo ? `${repo}#${number}` : String(number),
     ref: `${repo ? taskRepoName : ''}#${number}`, inProgress: state === 'open' && Boolean(claim),
     waitingOn: field(body, 'Waiting on'), checkAfter: field(body, 'Check after'),
-    priority: [1, 2, 3].find(n => labels.includes(`p${n}`)) ?? 2,
+    priorityLabel, priority: priorityLabel ? Number(priorityLabel[1]) : 2,
     tags: labels.filter(l => !OPEN.includes(l) && !LEGACY.has(l) && !/^p[123]$/.test(l)) };
 }
 
@@ -125,9 +126,14 @@ export const visibleIssues = (issues, filter, me, showEveryone) =>
 
 export function grouped(issues, me = '') {
   const section = i => i.status === 'input-needed' && !belongsTo(i, me) ? 'on-hold' : i.status;
-  return OPEN.map(status => [status, issues.filter(i => section(i) === status).sort((a, b) =>
+  const decisions = (a, b) => (a.priorityLabel ? a.priority : 4) - (b.priorityLabel ? b.priority : 4)
+    || compare(a.waitingSince || a.updatedAt || '\uffff', b.waitingSince || b.updatedAt || '\uffff')
+    || a.number - b.number || compare(a.key, b.key);
+  const recent = (a, b) =>
     compare(b.updatedAt, a.updatedAt) || Number(b.inProgress) - Number(a.inProgress)
-    || a.priority - b.priority || a.number - b.number)]);
+    || a.priority - b.priority || a.number - b.number;
+  return OPEN.map(status => [status, issues.filter(i => section(i) === status)
+    .sort(status === 'input-needed' ? decisions : recent)]);
 }
 
 export function searchIssues(issues, query, homeRepo = '') {

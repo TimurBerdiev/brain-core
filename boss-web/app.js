@@ -1,20 +1,23 @@
 import { Demo } from './demo.js';
-import { GitHub, validRepo } from './github.js';
+import { GitHub, isLoopback, validRepo } from './github.js';
 import { externalLink, markdown } from './markdown.js';
 import { answerComment, belongsTo, commentKind, commentText, currentCard, cycle, describeFilter, grouped,
   MOVE_TO, pickOf, questionComment, searchIssues, stripStatusLines, visibleIssues, workstreamsOf } from './model.js';
 
 const root = document.querySelector('#app');
-const demo = new URLSearchParams(location.search).has('demo');
+const params = new URLSearchParams(location.search);
+const demo = params.has('demo');
+const localDogfood = !demo && params.has('local-dogfood') && isLoopback(location);
 const key = 'boss-web.settings';
-const prefsKey = demo ? `${key}.demo` : key;
+const prefsKey = demo ? `${key}.demo` : localDogfood ? `${key}.local-dogfood` : key;
 const settings = (() => {
   try { return JSON.parse(localStorage.getItem(prefsKey)) ?? {}; } catch { return {}; }
 })();
 const names = { 'input-needed': 'For you', ready: 'Agents', 'on-hold': 'On hold', backlog: 'Backlog',
   done: 'Completed', dropped: 'Dropped' };
 const moveNames = { ready: 'Ready', 'on-hold': 'On hold', backlog: 'Backlog', done: 'Done', dropped: 'Dropped' };
-let backend = demo ? new Demo() : (validRepo(settings.repo ?? '') && settings.token ? new GitHub(settings.repo, settings.token) : null);
+let backend = demo ? new Demo() : localDogfood ? new GitHub('local/boss', '', { localOrigin: location.origin })
+  : (validRepo(settings.repo ?? '') && settings.token ? new GitHub(settings.repo, settings.token) : null);
 let view, generation = 0, searchQuery = '', completedOpen = false;
 let filter = new Set(settings.filter ?? []), showEveryone = Boolean(settings.showEveryone);
 let owner = '', toast = '';
@@ -159,8 +162,9 @@ function renderSettings(main, id) {
     } finally { submit.disabled = false; }
   } } }, formField('Brain repository', repo), formField('Fine-grained personal access token', token), error, submit);
   main.append(heading(backend ? 'Settings' : 'Boss', 'Brain Core', backend ? [button('Back', back)] : []));
-  if (demo) {
-    main.append(panel(el('h2', {}, 'Sample workspace'), caption('Demo mode does not connect to GitHub.'),
+  if (demo || localDogfood) {
+    main.append(panel(el('h2', {}, demo ? 'Sample workspace' : 'Local dogfood'),
+      caption('This workspace does not connect to GitHub.'),
       el('a', { class: 'button', href: './' }, 'Connect a real workspace')));
     return;
   }
@@ -181,14 +185,16 @@ function renderSettings(main, id) {
   }, { class: 'danger' }));
 }
 
-function taskList(issues) {
+function taskList(issues, decisions = false) {
   return el('ul', { class: 'task-list' }, issues.map(issue => {
     const meta = [issue.ref];
     if (issue.inProgress) meta.push(`In progress · ${issue.claim}`);
     else if (!belongsTo(issue, owner)) meta.push(issue.assignees.map(name => `@${name}`).join(', '));
     else if (issue.waitingOn) meta.push(issue.waitingOn);
     return el('li', {}, button([
-      el('span', { class: 'task-title' }, issue.title), el('span', { class: 'task-meta' }, meta.join(' · ')),
+      el('span', { class: 'task-title' }, issue.title),
+      el('span', { class: 'task-meta' }, decisions ? badge(issue.priorityLabel?.toUpperCase() ?? 'No priority', 'priority') : null,
+        meta.join(' · ')),
     ], () => navigate('detail', { issue: issue.key }), { class: 'task-row' }));
   }));
 }
@@ -202,7 +208,8 @@ function renderQueue(main, id) {
   const error = alert();
   const done = toast;
   toast = '';
-  main.append(heading('Tasks', demo ? 'Boss · Sample workspace' : `Boss · ${backend.home}`, [search, setup]),
+  main.append(heading('Tasks', demo ? 'Boss · Sample workspace' : localDogfood ? 'Boss · Local dogfood'
+    : `Boss · ${backend.home}`, [search, setup]),
     ...(done ? [status(done)] : []), error, notices, content);
 
   function draw() {
@@ -224,7 +231,7 @@ function renderQueue(main, id) {
       el('label', { class: 'toggle' }, check, "Show everyone's tasks"));
     const sections = grouped(visibleIssues(queue?.issues ?? [], filter, owner, showEveryone), owner).map(([name, issues]) =>
       issues.length ? el('section', { class: `group ${name}` }, el('h2', {}, names[name], badge(String(issues.length), name)),
-        taskList(issues)) : null).filter(Boolean);
+        taskList(issues, name === 'input-needed')) : null).filter(Boolean);
     const completed = caches.completed;
     const history = el('details', { class: 'panel history', open: completedOpen ? '' : null }, el('summary', {}, 'Completed'));
     if (completed) {
