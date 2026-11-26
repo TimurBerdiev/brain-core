@@ -2,12 +2,19 @@ import io
 import json
 import unittest
 from contextlib import redirect_stdout
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import dogfood
 
 
 class DogfoodTests(unittest.TestCase):
+    def test_cli_defaults_all_tasks_to_timur(self):
+        for options, expected in (([], "TimurBerdiev"), (["--roman", "other"], "other")):
+            with self.subTest(options=options), patch("sys.argv", ["dogfood.py", "owner/boss", *options]), \
+                    patch.object(dogfood, "seed") as seed:
+                dogfood.main()
+            seed.assert_called_once_with("owner/boss", {"timur": "TimurBerdiev", "roman": expected}, dry_run=False)
+
     def test_dry_run_is_offline_and_includes_checkpoints_and_cards(self):
         api = Mock()
         with redirect_stdout(io.StringIO()) as output:

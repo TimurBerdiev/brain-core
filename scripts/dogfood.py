@@ -65,16 +65,17 @@ def seed(repo, assignees, *, dry_run=False, api=task.repo_api):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("repo", metavar="OWNER/REPO")
-    parser.add_argument("--timur", default="timur", metavar="LOGIN")
-    parser.add_argument("--roman", default="roman", metavar="LOGIN", help="Roman's GitHub login, or 'none' to leave his tasks unassigned")
+    parser.add_argument("--timur", default="TimurBerdiev", metavar="LOGIN")
+    parser.add_argument("--roman", metavar="LOGIN", help="Optional second assignee; defaults to the primary assignee")
     parser.add_argument("--dry-run", action="store_true", help="Print the seed plan without any GitHub calls")
     args = parser.parse_args()
     if not re.fullmatch(r"[\w-]+/[\w.-]+", args.repo, re.ASCII) or args.repo.split("/")[1] in (".", ".."):
         parser.error("repo must be OWNER/REPO")
-    for login in (args.timur, args.roman):
+    assignees = {"timur": args.timur, "roman": args.roman or args.timur}
+    for login in assignees.values():
         if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?", login):
             parser.error("assignees must be GitHub logins")
-    seed(args.repo, {"timur": args.timur, "roman": None if args.roman == "none" else args.roman}, dry_run=args.dry_run)
+    seed(args.repo, assignees, dry_run=args.dry_run)
 
 
 if __name__ == "__main__":

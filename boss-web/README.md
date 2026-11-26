@@ -10,17 +10,17 @@ Within each priority it shows the longest-waiting first, using the GitHub status
 
 ## Use Boss to build Boss
 
-Use an Issues-enabled shared repository both people can access. Add it to each Brain's `repos.yaml` as `tasks: assigned`.
+Use an Issues-enabled repository. If connecting through a Brain, add it to the Brain's `repos.yaml` as `tasks: assigned`.
 For the Boss dogfood repo, you can also connect the PWA directly to `TimurBerdiev/brain-core` using your own token.
 With no Brain workspace files in that repo, Boss uses the signed-in GitHub account to identify your tasks.
-After checking the GitHub logins and assignee access, preview and run the same command without `--dry-run`:
+The Boss dogfood queue defaults to Timur. Preview the seed, then run the same command without `--dry-run`:
 
 ```sh
-python3 scripts/dogfood.py OWNER/REPO --timur TIMUR_LOGIN --roman ROMAN_LOGIN --dry-run
+python3 scripts/dogfood.py TimurBerdiev/brain-core --dry-run
 ```
 
 Run this from the core checkout with `gh` signed in and permission to edit issues and labels. Re-running keeps existing issues and decisions.
-If Roman cannot yet be assigned issues, use `--roman none` and assign his tasks in GitHub once he has access.
+For a different repository, use `--timur LOGIN` to override the default assignee. An assignable second person is optional (`--roman LOGIN`).
 After answering in Boss, run scoped `/autopilot <task-repo-alias>` in the assignee's Brain (or wait for their configured runner).
 The worker reads the answer and resumes from **Next**; Boss itself doesn't start a worker.
 
