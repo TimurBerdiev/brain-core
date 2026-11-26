@@ -25,8 +25,9 @@ test('Boss dogfood seeds once, answers the top card and resumes via a real task.
     throw new Error(`Dogfood server did not start: ${stderr}`);
   }
   const origin = await ready();
-  const worker = () => fetch(`${origin}/worker/take`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  const write = (path, method, body, requestOrigin) => fetch(`${origin}${path}`, {
+    method, headers: { 'Content-Type': 'application/json', ...(requestOrigin ? { Origin: requestOrigin } : {}) },
+    body: JSON.stringify(body),
   });
   const client = new GitHub('local/boss', '', { localOrigin: origin });
   const queue = await client.list('queue');
@@ -37,7 +38,15 @@ test('Boss dogfood seeds once, answers the top card and resumes via a real task.
   assert.deepEqual(ranked.map(issue => issue.priorityLabel), ['p1', 'p2']);
   assert.ok(ranked.every(issue => issue.waitingSince));
   assert.equal(queue.issues.filter(issue => issue.status === 'input-needed').length, 3);
-  const blocked = await worker();
+  const foreignOrigin = 'http://127.0.0.1:1';
+  const target = `/api/repos/local/boss/issues/${ranked[0].number}`;
+  for (const [path, method, body] of [[`${target}/comments`, 'POST', { body: 'Unwanted comment' }],
+    [target, 'PATCH', { labels: ['ready'] }], ['/worker/take', 'POST', {}]]) {
+    const rejected = await write(path, method, body, foreignOrigin);
+    assert.equal(rejected.status, 403);
+    assert.equal(await rejected.text(), 'Same-origin writes required');
+  }
+  const blocked = await write('/worker/take', 'POST', {});
   assert.equal(blocked.status, 409);
   assert.equal((await blocked.json()).message, 'nothing to pick up');
   const { issue, comments } = await client.detail(ranked[0]);
@@ -49,7 +58,7 @@ test('Boss dogfood seeds once, answers the top card and resumes via a real task.
   assert.deepEqual(answered.labels, ['p1', 'ready']);
   assert.equal(answered.waitingOn, '');
   assert.equal(rank((await client.list('queue')).issues).length, 1);
-  const resume = await worker();
+  const resume = await write('/worker/take', 'POST', {}, origin);
   assert.equal(resume.status, 200, await resume.clone().text());
   const pickup = await resume.json();
   assert.equal(pickup.number, issue.number);

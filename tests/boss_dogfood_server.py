@@ -150,8 +150,13 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def handle_request(self):
-        if self.headers.get("Host") != f"127.0.0.1:{self.server.server_port}":
+        host = f"127.0.0.1:{self.server.server_port}"
+        if self.headers.get("Host") != host:
             self.send(403, b"Loopback host required", "text/plain")
+            return
+        if self.command in ("POST", "PATCH") and any(
+                origin != f"http://{host}" for origin in self.headers.get_all("Origin", [])):
+            self.send(403, b"Same-origin writes required", "text/plain")
             return
         url = urlsplit(self.path)
         fixture = self.server.fixture
